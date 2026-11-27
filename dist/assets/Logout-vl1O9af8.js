@@ -1,1 +1,0 @@
-import{dt as e,w as t}from"./Stack-CJ569HZU.js";var n=e(),r=t((0,n.jsx)(`path`,{d:`M4 9h4v11H4zm12 4h4v7h-4zm-6-9h4v16h-4z`}),`BarChart`),i=t((0,n.jsx)(`path`,{d:`m17 7-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4z`}),`Logout`);export{r as n,i as t};
