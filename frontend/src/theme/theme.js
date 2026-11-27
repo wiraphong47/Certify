@@ -1,5 +1,11 @@
 import { createTheme } from '@mui/material/styles'
 
+export const AGENCY_COLORS = {
+  yellow: '#FFF200', // เหลืองหลัก
+  yellowSub: '#FFC600', // เหลืองรอง
+  navy: '#0C2F53', // น้ำเงิน
+}
+
 export function createCertifyTheme(mode = 'light') {
   const isDark = mode === 'dark'
 
@@ -7,62 +13,64 @@ export function createCertifyTheme(mode = 'light') {
     ? {
         mode: 'dark',
         primary: {
-          main: '#4A78A8',
-          dark: '#355B82',
-          light: '#6D99C7',
-          contrastText: '#FFFFFF',
+          main: AGENCY_COLORS.yellow,
+          dark: AGENCY_COLORS.yellowSub,
+          light: '#FFF766',
+          contrastText: AGENCY_COLORS.navy,
         },
         secondary: {
-          main: '#FFC600',
-          dark: '#E0AC00',
-          light: '#FFF200',
-          contrastText: '#0C2F53',
+          main: AGENCY_COLORS.yellowSub,
+          dark: '#E0AE00',
+          light: AGENCY_COLORS.yellow,
+          contrastText: AGENCY_COLORS.navy,
         },
         success: {
           main: '#5ED4A0',
-          contrastText: '#0B1722',
+          contrastText: '#071B30',
         },
         warning: {
-          main: '#F5A35C',
-          contrastText: '#0B1722',
+          main: AGENCY_COLORS.yellowSub,
+          contrastText: AGENCY_COLORS.navy,
         },
         error: {
           main: '#F06A6A',
         },
         background: {
-          default: '#0B1722',
-          paper: '#13273A',
+          default: '#071B30',
+          paper: AGENCY_COLORS.navy,
         },
         text: {
-          primary: '#EAF2F8',
-          secondary: '#9FB3C5',
+          primary: '#FFFFFF',
+          secondary: '#C2D3E4',
         },
-        divider: '#2A4258',
+        divider: '#1E466E',
         certify: {
-          navy: '#0C2F53',
-          teal: '#4A78A8',
-          sun: '#FFF200',
-          sun2: '#FFC600',
+          navy: AGENCY_COLORS.navy,
+          teal: AGENCY_COLORS.yellow,
+          yellow: AGENCY_COLORS.yellow,
+          yellowSub: AGENCY_COLORS.yellowSub,
+          sun: AGENCY_COLORS.yellow,
+          sun2: AGENCY_COLORS.yellowSub,
           ok: '#5ED4A0',
-          warn: '#F5A35C',
-          line: '#2A4258',
-          cam: '#071018',
-          hoverTint: 'rgba(74, 120, 168, 0.14)',
+          warn: AGENCY_COLORS.yellowSub,
+          line: '#1E466E',
+          cam: '#07192D',
+          hoverTint: 'rgba(255, 242, 0, 0.08)',
         },
       }
     : {
         mode: 'light',
         primary: {
-          main: '#0C2F53',
+          main: AGENCY_COLORS.navy,
           dark: '#08203A',
-          light: '#1B4D7E',
+          light: '#164675',
           contrastText: '#FFFFFF',
         },
         secondary: {
-          main: '#FFC600',
-          dark: '#E0AC00',
-          light: '#FFF200',
-          contrastText: '#0C2F53',
+          main: AGENCY_COLORS.yellowSub,
+          dark: '#E0AE00',
+          light: AGENCY_COLORS.yellow,
+          contrastText: AGENCY_COLORS.navy,
         },
         success: {
           main: '#12724A',
@@ -76,24 +84,26 @@ export function createCertifyTheme(mode = 'light') {
           main: '#C62828',
         },
         background: {
-          default: '#F7F8FA',
+          default: '#F5F7FA',
           paper: '#FFFFFF',
         },
         text: {
-          primary: '#0C2F53',
-          secondary: '#53677B',
+          primary: AGENCY_COLORS.navy,
+          secondary: '#52657A',
         },
-        divider: '#D6DEE7',
+        divider: '#D8E0E8',
         certify: {
-          navy: '#0C2F53',
-          teal: '#0C2F53',
-          sun: '#FFF200',
-          sun2: '#FFC600',
+          navy: AGENCY_COLORS.navy,
+          teal: AGENCY_COLORS.navy,
+          yellow: AGENCY_COLORS.yellow,
+          yellowSub: AGENCY_COLORS.yellowSub,
+          sun: AGENCY_COLORS.yellow,
+          sun2: AGENCY_COLORS.yellowSub,
           ok: '#12724A',
           warn: '#B54708',
-          line: '#D6DEE7',
-          cam: '#0C1A28',
-          hoverTint: 'rgba(14, 124, 134, 0.07)',
+          line: '#D8E0E8',
+          cam: '#09213B',
+          hoverTint: 'rgba(12, 47, 83, 0.05)',
         },
       }
 
@@ -105,7 +115,7 @@ export function createCertifyTheme(mode = 'light') {
     typography: {
       fontFamily: '"IBM Plex Sans Thai", system-ui, -apple-system, sans-serif',
       fontSize: 16,
-      h1: { fontSize: '1.75rem', fontWeight: 700, lineHeight: 1.35 },
+      h1: { fontSize: '1.75rem', fontWeight: 700, lineHeight: 1.32 },
       h2: { fontSize: '1.375rem', fontWeight: 700, lineHeight: 1.35 },
       h3: { fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.4 },
       h4: { fontSize: '1.05rem', fontWeight: 700, lineHeight: 1.4 },
@@ -115,7 +125,7 @@ export function createCertifyTheme(mode = 'light') {
       MuiCssBaseline: {
         styleOverrides: {
           ':focus-visible': {
-            outline: '3px solid #FFF200',
+            outline: `2px solid ${AGENCY_COLORS.yellowSub}`,
             outlineOffset: '2px',
           },
         },
@@ -126,10 +136,21 @@ export function createCertifyTheme(mode = 'light') {
         },
         styleOverrides: {
           root: {
-            borderRadius: 8,
+            borderRadius: 10,
             paddingBlock: 8,
             paddingInline: 16,
             fontSize: '0.95rem',
+            boxShadow: 'none',
+            '&:hover': {
+              boxShadow: 'none',
+            },
+          },
+        },
+      },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: {
+            borderRadius: 10,
           },
         },
       },
@@ -147,7 +168,8 @@ export function createCertifyTheme(mode = 'light') {
         styleOverrides: {
           root: {
             borderColor: palette.divider,
-            borderRadius: 12,
+            borderRadius: 14,
+            boxShadow: 'none',
           },
         },
       },

@@ -41,9 +41,9 @@ export default function AdminLayout() {
           sx={{
             bgcolor: '#0C2F53',
             color: '#FFFFFF',
-            borderRadius: 2.5,
+            borderRadius: '14px',
             borderBottom: '4px solid #FFF200',
-            p: { xs: 2, sm: 2.75 },
+            p: { xs: 2, sm: 2.5 },
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -55,20 +55,24 @@ export default function AdminLayout() {
             <Typography variant="h2" sx={{ color: '#fff', fontSize: { xs: 19, sm: 22 } }}>
               แผงควบคุม Admin
             </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
+            <Typography variant="body2" sx={{ color: '#FFC600', fontWeight: 600, mt: 0.5 }}>
               Certify · จัดการหลักสูตร DSR ID โค้ดเน็ต และ QR
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Chip label="ผู้ดูแลระบบ" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff' }} />
+            <Chip
+              label="ผู้ดูแลระบบ"
+              sx={{ bgcolor: '#FFF200', color: '#0C2F53', fontWeight: 800 }}
+            />
             <Button
               size="small"
               startIcon={<LogoutIcon />}
               onClick={handleLogout}
               sx={{
-                bgcolor: 'rgba(255,255,255,0.18)',
+                bgcolor: 'rgba(255,255,255,0.14)',
+                border: '1px solid rgba(255,255,255,0.28)',
                 color: '#fff',
-                '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' },
+                '&:hover': { bgcolor: 'rgba(255,198,0,0.25)', borderColor: '#FFC600' },
               }}
             >
               ออกจากระบบ
@@ -111,7 +115,8 @@ export default function AdminLayout() {
                     px: 1.5,
                     py: 1.25,
                     bgcolor: isActive ? 'primary.main' : 'transparent',
-                    color: isActive ? '#fff' : 'text.primary',
+                    color: isActive ? 'primary.contrastText' : 'text.primary',
+                    borderLeft: isActive ? '4px solid #FFC600' : '4px solid transparent',
                     '&:hover': {
                       bgcolor: isActive ? 'primary.dark' : 'action.hover',
                     },

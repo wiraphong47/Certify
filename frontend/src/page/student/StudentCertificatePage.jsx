@@ -40,9 +40,35 @@ export default function StudentCertificatePage() {
   const netGuideExportRef = useRef(null)
   const certClaimedRef = useRef(false)
   const autoSavedRef = useRef(false)
+  const mountedRef = useRef(true)
 
   const displayCourse = matchedCourse || activeCourse
   const courseHasNet = displayCourse?.hasNet !== false
+
+  // Keep latest values in a ref so async db updates never cancel the loading or auto-save timers
+  const latestRef = useRef({
+    displayCourse,
+    carrier,
+    skippedNet,
+    recordCertificateClaim,
+    showToast,
+  })
+  useEffect(() => {
+    latestRef.current = {
+      displayCourse,
+      carrier,
+      skippedNet,
+      recordCertificateClaim,
+      showToast,
+    }
+  }, [carrier, displayCourse, recordCertificateClaim, showToast, skippedNet])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   // Certificate loading stages -> claim -> done
   useEffect(() => {
@@ -53,13 +79,18 @@ export default function StudentCertificatePage() {
     const t3 = setTimeout(() => {
       if (!certClaimedRef.current) {
         certClaimedRef.current = true
-        const target = matchedCourse || activeCourse
+        const {
+          displayCourse: target,
+          carrier: curCarrier,
+          skippedNet: curSkipped,
+          recordCertificateClaim: claimFn,
+        } = latestRef.current
         if (target) {
           const targetHasNet = target.hasNet !== false
-          recordCertificateClaim({
+          claimFn({
             courseId: target.id,
-            carrier: targetHasNet ? carrier || 'AIS' : '',
-            skipped: targetHasNet ? skippedNet : true,
+            carrier: targetHasNet ? curCarrier || 'AIS' : '',
+            skipped: targetHasNet ? curSkipped : true,
           })
         }
       }
@@ -71,59 +102,69 @@ export default function StudentCertificatePage() {
       clearTimeout(t2)
       clearTimeout(t3)
     }
-  }, [activeCourse, carrier, certPhase, matchedCourse, recordCertificateClaim, skippedNet])
+  }, [certPhase])
 
   // Auto-save Certificate PNG (and Net Code Redemption Guide PNG if course includes net)
   useEffect(() => {
     if (certPhase !== 'done' || autoSavedRef.current) return undefined
-    autoSavedRef.current = true
     let cancelled = false
 
     const timer = setTimeout(async () => {
-      if (cancelled) return
+      if (cancelled || autoSavedRef.current || !mountedRef.current) return
+      autoSavedRef.current = true
       setAutoSaveStatus('saving')
       try {
-        const targetCourse = matchedCourse || activeCourse
+        const { displayCourse: targetCourse, carrier: curCarrier, showToast: toastFn } =
+          latestRef.current
         const targetHasNet = targetCourse?.hasNet !== false
-        const safeName = (targetCourse?.name || 'certificate').slice(0, 32).replace(/\s+/g, '-')
+        const safeName = (targetCourse?.name || 'certificate')
+          .slice(0, 32)
+          .replace(/[^\p{L}\p{N}_-]+/gu, '-')
+          .replace(/^-+|-+$/g, '') || 'certificate'
 
-        if (certExportRef.current) {
-          await downloadCertificatePng(certExportRef.current, `certify-ใบเกียรติบัตร-${safeName}.png`)
+        if (!certExportRef.current) {
+          throw new Error('Certificate element not ready')
         }
 
+        await downloadCertificatePng(
+          certExportRef.current,
+          `certify-ใบเกียรติบัตร-${safeName}.png`,
+        )
+
         if (targetHasNet) {
-          await new Promise((r) => setTimeout(r, 650))
-          if (cancelled) return
+          await new Promise((r) => setTimeout(r, 700))
+          if (!mountedRef.current) return
 
           if (netGuideExportRef.current) {
-            const carTag = (carrier || 'net').replace(/\s+/g, '')
+            const carTag = (curCarrier || 'net').replace(/\s+/g, '')
             await downloadNetGuidePng(
               netGuideExportRef.current,
               `certify-วิธีรับโค้ดเน็ต-${carTag}.png`,
             )
           }
         }
-        if (!cancelled) {
+        if (mountedRef.current) {
           setAutoSaveStatus('done')
-          showToast(
+          toastFn(
             targetHasNet
               ? 'บันทึกรูปใบเกียรติบัตรและขั้นตอนรับโค้ดเน็ตลงเครื่องแล้ว'
               : 'บันทึกรูปใบเกียรติบัตรลงเครื่องแล้ว',
             'success',
           )
         }
-      } catch {
-        if (!cancelled) {
+      } catch (err) {
+        console.error('[Certify] Auto-save failed:', err)
+        if (mountedRef.current) {
           setAutoSaveStatus('error')
         }
       }
-    }, 350)
+    }, 400)
 
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [activeCourse, carrier, certPhase, matchedCourse, showToast])
+  }, [certPhase])
 
   // Certificate done speech -> countdown intro (starts only after auto-save settles)
   useEffect(() => {
@@ -209,7 +250,11 @@ export default function StudentCertificatePage() {
     setCertExporting(true)
     try {
       const targetCourse = matchedCourse || activeCourse
-      const safeName = (targetCourse?.name || 'certificate').slice(0, 32).replace(/\s+/g, '-')
+      const safeName =
+        (targetCourse?.name || 'certificate')
+          .slice(0, 32)
+          .replace(/[^\p{L}\p{N}_-]+/gu, '-')
+          .replace(/^-+|-+$/g, '') || 'certificate'
       if (format === 'pdf') {
         await downloadCertificatePdf(certExportRef.current, `certify-ใบเกียรติบัตร-${safeName}.pdf`)
         showToast('บันทึกใบเกียรติบัตร (PDF) ลงเครื่องแล้ว', 'success')
@@ -217,7 +262,8 @@ export default function StudentCertificatePage() {
         await downloadCertificatePng(certExportRef.current, `certify-ใบเกียรติบัตร-${safeName}.png`)
         showToast('บันทึกรูปใบเกียรติบัตร (PNG) ลงเครื่องแล้ว', 'success')
       }
-    } catch {
+    } catch (err) {
+      console.error('[Certify] Manual export failed:', err)
       showToast('ไม่สามารถบันทึกไฟล์ได้ กรุณาลองอีกครั้ง', 'error')
     } finally {
       setCertExporting(false)
@@ -232,7 +278,8 @@ export default function StudentCertificatePage() {
       const carTag = (carrier || 'net').replace(/\s+/g, '')
       await downloadNetGuidePng(netGuideExportRef.current, `certify-วิธีรับโค้ดเน็ต-${carTag}.png`)
       showToast('บันทึกรูปขั้นตอนรับโค้ดเน็ต (PNG) ลงเครื่องแล้ว', 'success')
-    } catch {
+    } catch (err) {
+      console.error('[Certify] Net guide export failed:', err)
       showToast('ไม่สามารถบันทึกรูปขั้นตอนรับโค้ดเน็ตได้ กรุณาลองอีกครั้ง', 'error')
     } finally {
       setCertExporting(false)

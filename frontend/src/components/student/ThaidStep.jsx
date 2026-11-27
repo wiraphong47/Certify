@@ -203,7 +203,7 @@ export default function ThaidStep({
               placeItems: 'center',
               bgcolor:
                 theme.palette.mode === 'dark'
-                  ? 'rgba(74, 120, 168, 0.2)'
+                  ? 'rgba(255, 242, 0, 0.14)'
                   : 'rgba(12, 47, 83, 0.08)',
               color: 'primary.main',
             })}
@@ -292,49 +292,38 @@ export default function ThaidStep({
 
       {/* Hero Identity Card */}
       <Box
-        sx={(theme) => ({
+        sx={{
           bgcolor: 'background.default',
-          border: '1.5px solid',
+          border: '1px solid',
           borderColor: 'divider',
-          borderRadius: '18px',
+          borderRadius: '16px',
           px: 2.5,
-          py: 3,
+          py: 2.75,
           textAlign: 'center',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 1.75,
+          gap: 1.5,
           my: 'auto',
-          boxShadow:
-            theme.palette.mode === 'dark'
-              ? 'inset 0 1px 0 rgba(255, 255, 255, 0.04)'
-              : '0 2px 10px rgba(12, 47, 83, 0.05)',
-        })}
+        }}
       >
         <Box
-          sx={(theme) => ({
-            width: 84,
-            height: 84,
-            borderRadius: '22px',
+          sx={{
+            width: 80,
+            height: 80,
+            borderRadius: '18px',
             display: 'grid',
             placeItems: 'center',
-            bgcolor:
-              theme.palette.mode === 'dark'
-                ? 'rgba(74, 120, 168, 0.2)'
-                : 'rgba(12, 47, 83, 0.08)',
-            border: '1.5px solid',
-            borderColor:
-              theme.palette.mode === 'dark'
-                ? 'rgba(74, 120, 168, 0.4)'
-                : 'rgba(12, 47, 83, 0.14)',
-            color: 'primary.main',
-          })}
+            bgcolor: '#0C2F53',
+            border: '2px solid #FFC600',
+            color: '#FFF200',
+          }}
         >
-          <BadgeIcon sx={{ fontSize: 48 }} aria-hidden="true" />
+          <BadgeIcon sx={{ fontSize: 42 }} aria-hidden="true" />
         </Box>
 
         <Box>
-          <Typography sx={{ fontSize: 16.5, fontWeight: 700, mb: 0.5 }}>
+          <Typography sx={{ fontSize: 16.5, fontWeight: 800, mb: 0.35 }}>
             ยืนยันตัวตนรวดเร็วผ่านแอป ThaID
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13.5 }}>
@@ -342,7 +331,7 @@ export default function ThaidStep({
           </Typography>
         </Box>
 
-        <Stack spacing={0.75} sx={{ width: '100%', textAlign: 'left', pt: 0.5 }}>
+        <Stack spacing={0.75} sx={{ width: '100%', textAlign: 'left', pt: 0.25 }}>
           {[
             'ไม่ต้องพิมพ์ชื่อ-นามสกุลด้วยตนเอง',
             'ปลอดภัย รองรับผู้ใช้งานทุกกลุ่ม',
@@ -351,10 +340,19 @@ export default function ThaidStep({
               key={item}
               direction="row"
               spacing={1}
-              sx={{ alignItems: 'center', color: 'text.secondary' }}
+              sx={{
+                alignItems: 'center',
+                color: 'text.primary',
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: '10px',
+                px: 1.25,
+                py: 0.75,
+              }}
             >
               <CheckCircleOutlineIcon sx={{ fontSize: 18, color: 'success.main', flexShrink: 0 }} />
-              <Typography variant="body2" sx={{ fontSize: 13.5 }}>
+              <Typography variant="body2" sx={{ fontSize: 13.5, fontWeight: 600 }}>
                 {item}
               </Typography>
             </Stack>

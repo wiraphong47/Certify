@@ -10,6 +10,8 @@ import {
   Box,
   Button,
   Card,
+  Chip,
+  CircularProgress,
   Divider,
   IconButton,
   InputAdornment,
@@ -27,6 +29,12 @@ import {
   setAuthSession,
 } from '../services/authService'
 
+const ORGANIZER_SAMPLES = [
+  { id: 'DSR-0123', label: 'DSR-0123 (ผู้พิการ·แจกเน็ต)' },
+  { id: 'DSR-0245', label: 'DSR-0245 (ไม่แจกเน็ต)' },
+  { id: 'DSR-0412', label: 'DSR-0412 (บุคคลทั่วไป)' },
+]
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const { showToast } = useCertify()
@@ -36,6 +44,7 @@ export default function LoginPage() {
   const [identifier, setIdentifier] = useState('DSR-0123')
   const [password, setPassword] = useState('demo1234')
   const [showPassword, setShowPassword] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   const handleSelectRole = (nextRole) => {
@@ -52,28 +61,34 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (submitting) return
     setError('')
+    setSubmitting(true)
 
-    if (role === 'admin') {
-      const res = await loginAdmin(identifier, password)
+    try {
+      if (role === 'admin') {
+        const res = await loginAdmin(identifier, password)
+        if (!res.ok) {
+          setError(res.error || 'เข้าสู่ระบบไม่สำเร็จ')
+          return
+        }
+        setAuthSession(res.session)
+        showToast('เข้าสู่ระบบผู้ดูแลระบบ (Admin) สำเร็จ', 'success')
+        navigate('/admin/overview', { replace: true })
+        return
+      }
+
+      const res = await loginOrganizer(identifier, password)
       if (!res.ok) {
         setError(res.error || 'เข้าสู่ระบบไม่สำเร็จ')
         return
       }
       setAuthSession(res.session)
-      showToast('เข้าสู่ระบบผู้ดูแลระบบ (Admin) สำเร็จ', 'success')
-      navigate('/admin/overview', { replace: true })
-      return
+      showToast(`ยินดีต้อนรับ ${res.account.name}`, 'success')
+      navigate('/organizer/overview', { replace: true })
+    } finally {
+      setSubmitting(false)
     }
-
-    const res = await loginOrganizer(identifier, password)
-    if (!res.ok) {
-      setError(res.error || 'เข้าสู่ระบบไม่สำเร็จ')
-      return
-    }
-    setAuthSession(res.session)
-    showToast(`ยินดีต้อนรับ ${res.account.name}`, 'success')
-    navigate('/organizer/overview', { replace: true })
   }
 
   const handleLogoutExisting = () => {
@@ -84,20 +99,41 @@ export default function LoginPage() {
 
   return (
     <Box sx={{ maxWidth: 460, mx: 'auto', my: { xs: 1, sm: 2.5 } }}>
-      <Card sx={{ p: { xs: 2.5, sm: 3.5 } }}>
-        <Box sx={{ textAlign: 'center', mb: 2.5 }}>
-          <Typography variant="h2" sx={{ fontSize: { xs: 22, sm: 25 }, mb: 0.5 }}>
-            เข้าสู่ระบบ
+      <Card
+        sx={{
+          borderRadius: '16px',
+          overflow: 'hidden',
+          border: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        <Box
+          sx={{
+            bgcolor: '#0C2F53',
+            color: '#FFFFFF',
+            px: { xs: 2.5, sm: 3.5 },
+            py: 2.25,
+            textAlign: 'center',
+            borderBottom: '3px solid #FFF200',
+          }}
+        >
+          <Typography
+            variant="h2"
+            sx={{ fontSize: { xs: 22, sm: 24 }, fontWeight: 800, mb: 0.35, color: '#FFFFFF' }}
+          >
+            เข้าสู่ระบบเจ้าหน้าที่
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            เลือกบทบาทและลงชื่อเข้าใช้งานระบบ Certify
+          <Typography variant="body2" sx={{ color: '#FFC600', fontWeight: 600 }}>
+            เลือกบทบาทและลงชื่อเข้าใช้งานระบบจัดการ Certify
           </Typography>
         </Box>
+
+        <Box sx={{ p: { xs: 2.5, sm: 3.5 } }}>
 
         {existingSession && (
           <Alert
             severity="info"
-            sx={{ mb: 2.5 }}
+            sx={{ mb: 2.5, borderRadius: '12px' }}
             action={
               <Stack direction="row" spacing={0.5}>
                 <Button
@@ -121,49 +157,58 @@ export default function LoginPage() {
             }
           >
             เข้าสู่ระบบไว้แล้วในฐานะ{' '}
-            <b>
-              {existingSession.role === 'admin'
-                ? 'Admin'
-                : `${existingSession.id}`}
-            </b>
+            <b>{existingSession.role === 'admin' ? 'Admin' : existingSession.id}</b>
           </Alert>
         )}
 
-        {/* Staff Role Selector */}
-        <Stack direction="row" spacing={1} sx={{ mb: 2.5 }}>
+        {/* Staff Role Selector (Segmented Pill Track) */}
+        <Box
+          sx={(theme) => ({
+            p: 0.5,
+            mb: 2.5,
+            borderRadius: '14px',
+            bgcolor:
+              theme.palette.mode === 'dark'
+                ? 'rgba(6, 21, 39, 0.65)'
+                : 'rgba(12, 47, 83, 0.06)',
+            border: '1px solid',
+            borderColor: 'divider',
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 0.5,
+          })}
+        >
           <Button
             type="button"
-            variant={role === 'organizer' ? 'contained' : 'outlined'}
+            variant={role === 'organizer' ? 'contained' : 'text'}
             color={role === 'organizer' ? 'primary' : 'inherit'}
             startIcon={<ManageAccountsIcon />}
             onClick={() => handleSelectRole('organizer')}
             sx={{
-              flex: 1,
-              py: 1.1,
-              borderWidth: 2,
-              borderColor: role === 'organizer' ? 'primary.main' : 'divider',
-              '&:hover': { borderWidth: 2 },
+              py: 1.05,
+              borderRadius: '11px',
+              fontWeight: 800,
+              color: role === 'organizer' ? undefined : 'text.secondary',
             }}
           >
             ผู้ดูแลหลักสูตร
           </Button>
           <Button
             type="button"
-            variant={role === 'admin' ? 'contained' : 'outlined'}
+            variant={role === 'admin' ? 'contained' : 'text'}
             color={role === 'admin' ? 'primary' : 'inherit'}
             startIcon={<AdminPanelSettingsIcon />}
             onClick={() => handleSelectRole('admin')}
             sx={{
-              flex: 1,
-              py: 1.1,
-              borderWidth: 2,
-              borderColor: role === 'admin' ? 'primary.main' : 'divider',
-              '&:hover': { borderWidth: 2 },
+              py: 1.05,
+              borderRadius: '11px',
+              fontWeight: 800,
+              color: role === 'admin' ? undefined : 'text.secondary',
             }}
           >
             Admin
           </Button>
-        </Stack>
+        </Box>
 
         <Stack component="form" onSubmit={handleSubmit} spacing={2}>
           <TextField
@@ -205,27 +250,65 @@ export default function LoginPage() {
             }}
           />
 
-          {error && <Alert severity="warning">{error}</Alert>}
+          {error && (
+            <Alert severity="warning" sx={{ borderRadius: '12px' }}>
+              {error}
+            </Alert>
+          )}
 
           <Button
             type="submit"
             variant="contained"
             size="large"
-            startIcon={<LoginIcon />}
+            disabled={submitting}
+            startIcon={
+              submitting ? <CircularProgress size={18} color="inherit" /> : <LoginIcon />
+            }
             fullWidth
-            sx={{ py: 1.35, fontSize: 16 }}
+            sx={{ minHeight: 50, borderRadius: '14px', fontSize: 16, fontWeight: 800 }}
           >
-            {role === 'admin' ? 'เข้าสู่ระบบ Admin' : 'เข้าสู่ระบบผู้ดูแลหลักสูตร'}
+            {submitting
+              ? 'กำลังตรวจสอบ...'
+              : role === 'admin'
+                ? 'เข้าสู่ระบบ Admin'
+                : 'เข้าสู่ระบบผู้ดูแลหลักสูตร'}
           </Button>
 
-          <Typography variant="caption" color="text.secondary">
-            {role === 'admin'
-              ? 'บัญชีทดลอง Admin: admin / admin1234'
-              : 'ตัวอย่าง DSR ID: DSR-0123 (ผู้พิการ), DSR-0412 (บุคคลทั่วไป), DSR-0245, DSR-0520 (DSR-0310 ถูกปิดใช้งาน)'}
-          </Typography>
+          {role === 'organizer' ? (
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mb: 0.75 }}
+              >
+                เลือกบัญชีทดลองด่วน:
+              </Typography>
+              <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                {ORGANIZER_SAMPLES.map((item) => (
+                  <Chip
+                    key={item.id}
+                    label={item.label}
+                    size="small"
+                    variant={identifier.toUpperCase() === item.id ? 'filled' : 'outlined'}
+                    color={identifier.toUpperCase() === item.id ? 'primary' : 'default'}
+                    onClick={() => {
+                      setError('')
+                      setIdentifier(item.id)
+                      setPassword('demo1234')
+                    }}
+                    sx={{ cursor: 'pointer', fontSize: 12 }}
+                  />
+                ))}
+              </Stack>
+            </Box>
+          ) : (
+            <Typography variant="caption" color="text.secondary">
+              บัญชีทดลอง Admin: <b>admin</b> / <b>admin1234</b>
+            </Typography>
+          )}
         </Stack>
 
-        <Divider sx={{ my: 3 }}>
+        <Divider sx={{ my: 2.75 }}>
           <Typography variant="caption" color="text.secondary">
             สำหรับนักเรียน / ผู้เข้าอบรม
           </Typography>
@@ -234,16 +317,19 @@ export default function LoginPage() {
         <Button
           type="button"
           variant="contained"
-          color="secondary"
           size="large"
           fullWidth
           startIcon={<QrCodeScannerIcon />}
           onClick={() => navigate('/student/scan')}
           sx={{
-            py: 1.4,
+            minHeight: 52,
+            borderRadius: '14px',
             fontSize: 16,
+            bgcolor: '#FFF200',
             color: '#0C2F53',
             fontWeight: 800,
+            border: '2px solid #FFC600',
+            '&:hover': { bgcolor: '#FFC600' },
           }}
         >
           สแกน QR รับใบเกียรติบัตร (นักเรียน)
@@ -255,6 +341,7 @@ export default function LoginPage() {
         >
           ผู้เข้าอบรมยืนยันตัวตนผ่านการสแกน QR และ ThaID โดยไม่ต้องใช้รหัสผ่าน
         </Typography>
+        </Box>
       </Card>
     </Box>
   )

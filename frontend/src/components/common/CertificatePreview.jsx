@@ -53,6 +53,7 @@ export const CertificateCanvas = forwardRef(function CertificateCanvas(
 
   return (
     <Box
+      ref={ref}
       sx={{
         width: '100%',
         containerType: 'inline-size',
@@ -60,7 +61,6 @@ export const CertificateCanvas = forwardRef(function CertificateCanvas(
       }}
     >
       <Box
-        ref={ref}
         sx={{
           position: 'relative',
           aspectRatio: '297 / 210',

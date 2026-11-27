@@ -121,9 +121,9 @@ export default function OrganizerLayout() {
         sx={{
           bgcolor: '#0C2F53',
           color: '#FFFFFF',
-          borderRadius: 2.5,
+          borderRadius: '14px',
           borderBottom: '4px solid #FFF200',
-          p: { xs: 2, sm: 2.75 },
+          p: { xs: 2, sm: 2.5 },
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -140,8 +140,9 @@ export default function OrganizerLayout() {
               label={activeLoggedInId}
               size="small"
               sx={{
-                bgcolor: 'rgba(255,255,255,0.2)',
-                color: '#fff',
+                bgcolor: '#FFF200',
+                color: '#0C2F53',
+                fontWeight: 800,
                 mr: 1,
                 height: 24,
               }}
@@ -161,12 +162,12 @@ export default function OrganizerLayout() {
             <Chip
               size="small"
               label={modeLabel}
-              sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff' }}
+              sx={{ bgcolor: 'rgba(255,255,255,0.16)', color: '#fff' }}
             />
             <Chip
               size="small"
               label={course.hasNet === false ? 'รับเฉพาะใบเซอร์ (ไม่แจกเน็ต)' : 'แจกโค้ดเน็ต'}
-              sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff' }}
+              sx={{ bgcolor: 'rgba(255,198,0,0.2)', color: '#FFF200' }}
             />
           </Stack>
         </Box>
@@ -176,9 +177,10 @@ export default function OrganizerLayout() {
           startIcon={<LogoutIcon />}
           onClick={handleLogout}
           sx={{
-            bgcolor: 'rgba(255,255,255,0.18)',
+            bgcolor: 'rgba(255,255,255,0.14)',
+            border: '1px solid rgba(255,255,255,0.28)',
             color: '#fff',
-            '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' },
+            '&:hover': { bgcolor: 'rgba(255,198,0,0.25)', borderColor: '#FFC600' },
           }}
         >
           ออกจากระบบ

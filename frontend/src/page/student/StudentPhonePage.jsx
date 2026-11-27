@@ -205,7 +205,7 @@ export default function StudentPhonePage() {
   if (phoneSubStep === 'car') {
     return (
       <CarrierQuadrantStep
-        phone={phone}
+        phone={formatPhone(phone)}
         carrier={carrier}
         statusMsg={statusMsg}
         onPickCarrier={handlePickCarrier}

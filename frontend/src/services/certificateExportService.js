@@ -3,20 +3,62 @@ async function captureElementPngDataUrl(element) {
     throw new Error('ไม่พบองค์ประกอบสำหรับบันทึกรูปภาพ')
   }
   const { toPng } = await import('html-to-image')
-  return toPng(element, {
+  const baseOptions = {
     cacheBust: true,
     pixelRatio: 2,
     backgroundColor: '#FFFFFF',
-  })
+  }
+
+  try {
+    return await toPng(element, baseOptions)
+  } catch {
+    // Fallback when cross-origin Google Fonts stylesheet blocks font embedding
+    return toPng(element, {
+      ...baseOptions,
+      skipFonts: true,
+    })
+  }
 }
 
-function triggerDownload(href, filename) {
+function dataUrlToBlob(dataUrl) {
+  const parts = dataUrl.split(',')
+  const mimeMatch = parts[0].match(/:(.*?);/)
+  const mime = mimeMatch ? mimeMatch[1] : 'image/png'
+  const binary = atob(parts[1])
+  const len = binary.length
+  const bytes = new Uint8Array(len)
+  for (let i = 0; i < len; i += 1) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return new Blob([bytes], { type: mime })
+}
+
+function triggerDownload(dataUrl, filename) {
+  let href = dataUrl
+  let objectUrl = ''
+
+  try {
+    if (typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
+      const blob = dataUrlToBlob(dataUrl)
+      objectUrl = URL.createObjectURL(blob)
+      href = objectUrl
+    }
+  } catch {
+    href = dataUrl
+  }
+
   const link = document.createElement('a')
   link.href = href
   link.download = filename
+  link.rel = 'noopener'
+  link.style.display = 'none'
   document.body.appendChild(link)
   link.click()
   link.remove()
+
+  if (objectUrl) {
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 10000)
+  }
 }
 
 export async function downloadElementPng(element, filename = 'certify-image.png') {

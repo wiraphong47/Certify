@@ -169,31 +169,27 @@ export default function CodeStep({
                 sx={(theme) => ({
                   width: 64,
                   height: 68,
-                  borderRadius: '14px',
+                  borderRadius: '12px',
                   border: '2px solid',
                   borderColor: errorText
                     ? 'error.main'
                     : isFilled
                       ? 'primary.main'
                       : isCurrent
-                        ? theme.palette.certify.sun2
+                        ? '#FFC600'
                         : 'divider',
                   bgcolor: isFilled
                     ? theme.palette.mode === 'dark'
-                      ? 'rgba(74, 120, 168, 0.22)'
+                      ? 'rgba(255, 242, 0, 0.12)'
                       : 'rgba(12, 47, 83, 0.06)'
                     : 'background.default',
-                  boxShadow:
-                    isCurrent && !errorText
-                      ? `0 0 0 3px ${theme.palette.mode === 'dark' ? 'rgba(255, 198, 0, 0.22)' : 'rgba(255, 198, 0, 0.35)'}`
-                      : 'none',
                   display: 'grid',
                   placeItems: 'center',
                   fontSize: 30,
                   fontWeight: 800,
                   color: 'text.primary',
                   fontVariantNumeric: 'tabular-nums',
-                  transition: 'border-color 0.15s, box-shadow 0.15s, background-color 0.15s',
+                  transition: 'border-color 0.15s, background-color 0.15s',
                 })}
               >
                 {digit}
@@ -236,33 +232,32 @@ export default function CodeStep({
         onClick={onListenCode}
         aria-label="แตะเพื่อพูดรหัสสี่หลัก"
         sx={(theme) => ({
-          minHeight: 56,
+          minHeight: 54,
           px: 2,
-          borderRadius: '14px',
+          borderRadius: '12px',
           bgcolor: listening ? 'success.main' : 'primary.main',
-          color: listening ? theme.palette.success.contrastText : '#FFFFFF',
+          color: listening ? theme.palette.success.contrastText : theme.palette.primary.contrastText,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 1.25,
           fontSize: 17,
           fontWeight: 800,
-          boxShadow: listening
-            ? `0 0 0 4px ${theme.palette.mode === 'dark' ? 'rgba(94, 212, 160, 0.25)' : 'rgba(18, 114, 74, 0.2)'}`
-            : 'none',
-          transition: 'background-color 0.15s, box-shadow 0.15s',
         })}
       >
         <Box
-          sx={{
+          sx={(theme) => ({
             width: 34,
             height: 34,
             borderRadius: '50%',
-            bgcolor: 'rgba(255, 255, 255, 0.2)',
+            bgcolor:
+              !listening && theme.palette.mode === 'dark'
+                ? 'rgba(12, 47, 83, 0.16)'
+                : 'rgba(255, 255, 255, 0.2)',
             display: 'grid',
             placeItems: 'center',
             flexShrink: 0,
-          }}
+          })}
         >
           {listening ? <GraphicEqIcon fontSize="small" /> : <MicIcon fontSize="small" />}
         </Box>
@@ -289,12 +284,12 @@ export default function CodeStep({
             variant="outlined"
             aria-label={`เลข ${num}`}
             onClick={() => onDigitPress(String(num))}
-            sx={{
-              minHeight: 54,
+            sx={(theme) => ({
+              minHeight: 52,
               py: 0.75,
               fontSize: 24,
               fontWeight: 700,
-              borderRadius: '14px',
+              borderRadius: '12px',
               borderWidth: 1.5,
               borderColor: 'divider',
               color: 'text.primary',
@@ -303,12 +298,9 @@ export default function CodeStep({
               '&:hover': {
                 borderWidth: 1.5,
                 borderColor: 'primary.main',
-                bgcolor: 'action.hover',
+                bgcolor: theme.palette.certify.hoverTint,
               },
-              '&:active': {
-                transform: 'scale(0.97)',
-              },
-            }}
+            })}
           >
             {num}
           </Button>
@@ -335,12 +327,12 @@ export default function CodeStep({
           variant="outlined"
           aria-label="เลข 0"
           onClick={() => onDigitPress('0')}
-          sx={{
-            minHeight: 54,
+          sx={(theme) => ({
+            minHeight: 52,
             py: 0.75,
             fontSize: 24,
             fontWeight: 700,
-            borderRadius: '14px',
+            borderRadius: '12px',
             borderWidth: 1.5,
             borderColor: 'divider',
             color: 'text.primary',
@@ -349,12 +341,9 @@ export default function CodeStep({
             '&:hover': {
               borderWidth: 1.5,
               borderColor: 'primary.main',
-              bgcolor: 'action.hover',
+              bgcolor: theme.palette.certify.hoverTint,
             },
-            '&:active': {
-              transform: 'scale(0.97)',
-            },
-          }}
+          })}
         >
           0
         </Button>
