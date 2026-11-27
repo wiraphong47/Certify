@@ -2,9 +2,9 @@
  * Hybrid Voice Service (Static MP3 clips + Web Speech API TTS/STT)
  * - Master mute gate (`voiceEnabled`) guarantees 100% silence across every screen
  *   whenever the user toggles voice OFF, and cancels active TTS/Audio/Mic immediately.
- * - Cross-platform iOS (Safari/WebKit) + Android (Chrome/Samsung Internet) support:
- *   first-gesture audio unlock, Thai voice selection (Kanya/Google/Samsung),
- *   utterance GC guard, cancel-before-speak pacing, and onEnd safety watchdog.
+ * - Cross-platform iOS + Android + Desktop support:
+ *   synchronous speechSynthesis.speak() inside user gestures (no blank-primer poisoning),
+ *   AudioContext wake on first gesture, utterance GC guard, and onEnd safety net.
  * - Static prompts can optionally be placed in `public/audio/th/<promptKey>.mp3`.
  * - Dynamic prompts or missing clips automatically fall back to Web Speech API.
  */
@@ -32,78 +32,45 @@ let voiceEnabled = true
 let activeRec = null
 let activeAudio = null
 let currentUtterance = null
-let pendingSpeakTimer = null
 let speechOnEndFallbackTimer = null
-let cachedVoices = []
 let voiceEngineUnlocked = false
 let unlockListenersAttached = false
 let spkId = 0
 
-function refreshVoices() {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return []
-  try {
-    const list = window.speechSynthesis.getVoices() || []
-    if (list.length > 0) cachedVoices = list
-  } catch {
-    // ignore
-  }
-  return cachedVoices
-}
-
-function pickThaiVoice() {
-  const voices = cachedVoices.length > 0 ? cachedVoices : refreshVoices()
-  if (!voices.length) return null
-  const thaiVoices = voices.filter((v) => /^th([-_]|$)/i.test(String(v.lang || '')))
-  if (!thaiVoices.length) return null
-  // Prefer high-quality on-device Thai voices (iOS Kanya, Android Google/Samsung TTS)
-  return (
-    thaiVoices.find((v) => v.localService && /google|kanya|narisa|samsung/i.test(v.name || '')) ||
-    thaiVoices.find((v) => v.localService) ||
-    thaiVoices.find((v) => /google|samsung/i.test(v.name || '')) ||
-    thaiVoices[0]
-  )
-}
-
 export function unlockVoiceEngine() {
-  if (voiceEngineUnlocked || typeof window === 'undefined') return
-  voiceEngineUnlocked = true
+  if (typeof window === 'undefined') return
 
-  // 1. Wake up Web Audio session silently (helps iOS WebKit & Android Chrome)
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext
-    if (AudioCtx) {
-      const ctx = new AudioCtx()
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {})
-      }
-      const buffer = ctx.createBuffer(1, 1, 22050)
-      const source = ctx.createBufferSource()
-      source.buffer = buffer
-      source.connect(ctx.destination)
-      source.start(0)
-      setTimeout(() => {
-        try {
-          ctx.close()
-        } catch {
-          // ignore
+  if (!voiceEngineUnlocked) {
+    voiceEngineUnlocked = true
+    // Wake Web Audio session silently without poisoning the speechSynthesis queue
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      if (AudioCtx) {
+        const ctx = new AudioCtx()
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(() => {})
         }
-      }, 250)
+        const buffer = ctx.createBuffer(1, 1, 22050)
+        const source = ctx.createBufferSource()
+        source.buffer = buffer
+        source.connect(ctx.destination)
+        source.start(0)
+        setTimeout(() => {
+          try {
+            ctx.close()
+          } catch {
+            // ignore
+          }
+        }, 250)
+      }
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore
   }
 
-  // 2. Prime speechSynthesis & populate voice list inside the user gesture
   if ('speechSynthesis' in window) {
     try {
-      refreshVoices()
-      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-        const primer = new SpeechSynthesisUtterance(' ')
-        primer.lang = 'th-TH'
-        primer.volume = 0
-        primer.rate = 10
-        window.speechSynthesis.speak(primer)
-      }
+      window.speechSynthesis.getVoices()
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume()
       }
@@ -118,15 +85,13 @@ export function initVoiceUnlock() {
   unlockListenersAttached = true
 
   if ('speechSynthesis' in window) {
-    refreshVoices()
     try {
-      window.speechSynthesis.addEventListener?.('voiceschanged', refreshVoices)
+      window.speechSynthesis.getVoices()
     } catch {
-      window.speechSynthesis.onvoiceschanged = refreshVoices
+      // ignore
     }
   }
 
-  // Include touchend + click because Android Chrome requires activation events
   const events = ['touchstart', 'touchend', 'pointerdown', 'click', 'keydown']
   const onFirstGesture = () => {
     unlockVoiceEngine()
@@ -140,11 +105,7 @@ export function initVoiceUnlock() {
   }
 }
 
-function clearPendingSpeak() {
-  if (pendingSpeakTimer) {
-    clearTimeout(pendingSpeakTimer)
-    pendingSpeakTimer = null
-  }
+function clearSpeechTimers() {
   if (speechOnEndFallbackTimer) {
     clearTimeout(speechOnEndFallbackTimer)
     speechOnEndFallbackTimer = null
@@ -154,6 +115,7 @@ function clearPendingSpeak() {
 function stopAudioClip() {
   if (activeAudio) {
     try {
+      activeAudio.onplaying = null
       activeAudio.onended = null
       activeAudio.onerror = null
       activeAudio.pause()
@@ -182,7 +144,7 @@ export function stopListen() {
 export function stopAllVoice() {
   stopListen()
   stopAudioClip()
-  clearPendingSpeak()
+  clearSpeechTimers()
   currentUtterance = null
   spkId += 1
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -206,8 +168,9 @@ export function setVoiceEnabled(enabled) {
   return voiceEnabled
 }
 
-function speakWithSynthesis(text, myId, onEnd) {
-  clearPendingSpeak()
+function speakWithSynthesis(text, myId, onEnd, callbacks = {}) {
+  const { onStart, onBlocked } = callbacks
+  clearSpeechTimers()
 
   if (!voiceEnabled) {
     if (onEnd && myId === spkId) setTimeout(onEnd, 0)
@@ -222,58 +185,46 @@ function speakWithSynthesis(text, myId, onEnd) {
     const synth = window.speechSynthesis
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = 'th-TH'
-    utterance.rate = 0.85
+    utterance.rate = 0.8
     utterance.volume = 1
 
-    const thaiVoice = pickThaiVoice()
-    if (thaiVoice) {
-      utterance.voice = thaiVoice
-    }
-
-    // Keep strong module reference to avoid Safari/Android Chrome mid-speech GC
+    // Keep strong module reference so Safari/Chrome cannot GC utterance mid-speech
     currentUtterance = utterance
 
     let finished = false
     const finish = () => {
       if (finished) return
       finished = true
-      if (speechOnEndFallbackTimer) {
-        clearTimeout(speechOnEndFallbackTimer)
-        speechOnEndFallbackTimer = null
-      }
+      clearSpeechTimers()
       if (currentUtterance === utterance) {
         currentUtterance = null
       }
       if (onEnd && myId === spkId && voiceEnabled) onEnd()
     }
 
+    utterance.onstart = () => {
+      if (myId === spkId && voiceEnabled && onStart) onStart()
+    }
     utterance.onend = finish
-    utterance.onerror = finish
-
-    const doSpeak = () => {
-      if (myId !== spkId || !voiceEnabled) return
-      try {
-        if (synth.paused) synth.resume()
-        synth.speak(utterance)
-        // Safety net for Android TTS engines that occasionally drop onend
-        if (onEnd) {
-          const maxMs = Math.min(16000, Math.max(3000, String(text || '').length * 160 + 2000))
-          speechOnEndFallbackTimer = setTimeout(finish, maxMs)
-        }
-      } catch {
-        finish()
+    utterance.onerror = (event) => {
+      if (event?.error === 'not-allowed' && myId === spkId && onBlocked) {
+        onBlocked()
       }
+      finish()
     }
 
-    // On iOS WebKit and some Android builds, calling speak() right after cancel() can drop audio
+    // Call speak() synchronously inside user gesture (do NOT wrap in setTimeout)
     if (synth.speaking || synth.pending) {
       synth.cancel()
-      pendingSpeakTimer = setTimeout(() => {
-        pendingSpeakTimer = null
-        doSpeak()
-      }, 60)
-    } else {
-      doSpeak()
+    }
+    if (synth.paused) {
+      synth.resume()
+    }
+    synth.speak(utterance)
+
+    if (onEnd) {
+      const maxMs = Math.min(16000, Math.max(3000, String(text || '').length * 160 + 2000))
+      speechOnEndFallbackTimer = setTimeout(finish, maxMs)
     }
   } catch {
     if (onEnd && myId === spkId && voiceEnabled) onEnd()
@@ -281,10 +232,16 @@ function speakWithSynthesis(text, myId, onEnd) {
 }
 
 export function speakText(text, options = {}) {
-  const { promptKey = '', onEnd } = options
+  const {
+    promptKey = '',
+    onStart,
+    onEnd,
+    onBlocked,
+    allowSynthFallbackOnBlocked = true,
+  } = options
   stopListen()
   stopAudioClip()
-  clearPendingSpeak()
+  clearSpeechTimers()
 
   // Hard master mute gate: never emit sound when muted
   if (!voiceEnabled) {
@@ -305,6 +262,9 @@ export function speakText(text, options = {}) {
       }
       const audio = new Audio(clipUrl)
       activeAudio = audio
+      audio.onplaying = () => {
+        if (myId === spkId && voiceEnabled && onStart) onStart()
+      }
       audio.onended = () => {
         if (activeAudio === audio) activeAudio = null
         if (onEnd && myId === spkId && voiceEnabled) onEnd()
@@ -313,16 +273,29 @@ export function speakText(text, options = {}) {
         if (activeAudio === audio) activeAudio = null
         missingClips.add(clipUrl)
         if (myId === spkId && voiceEnabled) {
-          speakWithSynthesis(text, myId, onEnd)
+          speakWithSynthesis(text, myId, onEnd, { onStart, onBlocked })
         }
       }
       const playPromise = audio.play()
       if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch(() => {
+        playPromise.catch((err) => {
           if (activeAudio === audio) activeAudio = null
+          const errName = String(err?.name || '')
+          if (errName === 'AbortError') {
+            return
+          }
+          if (errName === 'NotAllowedError') {
+            if (myId !== spkId || !voiceEnabled) return
+            if (allowSynthFallbackOnBlocked) {
+              speakWithSynthesis(text, myId, onEnd, { onStart, onBlocked })
+            } else if (onBlocked) {
+              onBlocked()
+            }
+            return
+          }
           missingClips.add(clipUrl)
           if (myId === spkId && voiceEnabled) {
-            speakWithSynthesis(text, myId, onEnd)
+            speakWithSynthesis(text, myId, onEnd, { onStart, onBlocked })
           }
         })
       }
@@ -332,7 +305,7 @@ export function speakText(text, options = {}) {
     }
   }
 
-  speakWithSynthesis(text, myId, onEnd)
+  speakWithSynthesis(text, myId, onEnd, { onStart, onBlocked })
   return true
 }
 
@@ -344,7 +317,7 @@ export function isSpeechRecognitionSupported() {
 export function startListening({ onResult, onInterim, onError, onEnd, onStatus }) {
   stopListen()
   stopAudioClip()
-  clearPendingSpeak()
+  clearSpeechTimers()
 
   const SR =
     typeof window !== 'undefined'
