@@ -33,7 +33,7 @@ export default function PhoneStep({
           }}
         >
           <MicIcon sx={{ fontSize: 54 }} />
-          {listening ? 'กำลังฟัง พูดเบอร์ได้เลย...' : 'แตะเพื่อพูดเบอร์มือถือ'}
+          {listening ? 'กำลังฟัง... แตะอีกครั้งเพื่อหยุด' : 'แตะเพื่อพูดเบอร์มือถือ'}
         </Button>
       </Box>
 

@@ -266,7 +266,7 @@ export default function CodeStep({
         >
           {listening ? <GraphicEqIcon fontSize="small" /> : <MicIcon fontSize="small" />}
         </Box>
-        {listening ? 'กำลังฟัง... พูดตัวเลข 4 หลักได้เลย' : 'แตะเพื่อพูดรหัส 4 หลัก'}
+        {listening ? 'กำลังฟัง... แตะอีกครั้งเพื่อหยุด' : 'แตะเพื่อพูดรหัส 4 หลัก'}
       </Button>
 
       <Divider sx={{ my: -0.25 }}>

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  initVoiceUnlock,
   isSpeechRecognitionSupported,
   isVoiceEnabled,
   setVoiceEnabled,
@@ -7,6 +8,7 @@ import {
   startListening,
   stopAllVoice,
   stopListen,
+  unlockVoiceEngine,
 } from '../services/voiceService'
 
 export function useVoice() {
@@ -14,6 +16,7 @@ export function useVoice() {
   const [listening, setListening] = useState(false)
 
   useEffect(() => {
+    initVoiceUnlock()
     return () => {
       stopAllVoice()
     }
@@ -66,6 +69,7 @@ export function useVoice() {
     setVoiceEnabled(next)
     setAutoVoiceState(next)
     if (next) {
+      unlockVoiceEngine()
       if (announcement) {
         speakText(announcement, { promptKey })
       }
@@ -75,15 +79,30 @@ export function useVoice() {
     }
   }, [])
 
-  return {
-    autoVoice,
-    setAutoVoice,
-    listening,
-    speechSupported: isSpeechRecognitionSupported(),
-    speak,
-    listen,
-    stop,
-    stopMic,
-    toggleAutoVoice,
-  }
+  const speechSupported = isSpeechRecognitionSupported()
+
+  return useMemo(
+    () => ({
+      autoVoice,
+      setAutoVoice,
+      listening,
+      speechSupported,
+      speak,
+      listen,
+      stop,
+      stopMic,
+      toggleAutoVoice,
+    }),
+    [
+      autoVoice,
+      listen,
+      listening,
+      setAutoVoice,
+      speak,
+      speechSupported,
+      stop,
+      stopMic,
+      toggleAutoVoice,
+    ],
+  )
 }

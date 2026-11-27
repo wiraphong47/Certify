@@ -30,6 +30,7 @@ export default function StudentCodePage() {
   const [codeError, setCodeError] = useState('')
   const [statusMsg, setStatusMsg] = useState('')
   const [courseConfirm, setCourseConfirm] = useState(false)
+  const [micPrompting, setMicPrompting] = useState(false)
   const [nowMs, setNowMs] = useState(() => Date.now())
 
   const swipeHeadingRef = useRef(null)
@@ -37,6 +38,8 @@ export default function StudentCodePage() {
   const lastAnnouncedTokenRef = useRef(null)
   const mountedRef = useRef(true)
   const checkTimerRef = useRef(null)
+  const micPromptTimerRef = useRef(null)
+  const micPendingRef = useRef(false)
 
   const isCiStep = currentStep.id === 'checkin'
   const isCourseSwipeActive = courseConfirm && Boolean(matchedCourse)
@@ -56,18 +59,37 @@ export default function StudentCodePage() {
     }
   }, [currentStep.id, courseConfirm, code, voice.autoVoice])
 
-  // Cleanup mic & pending timers whenever leaving the code page
+  const {
+    autoVoice,
+    listening,
+    listen: voiceListen,
+    speak: voiceSpeak,
+    stop: voiceStop,
+    stopMic: voiceStopMic,
+  } = voice
+
+  const cancelMicPrompt = useCallback(() => {
+    micPendingRef.current = false
+    setMicPrompting(false)
+    if (micPromptTimerRef.current) {
+      clearTimeout(micPromptTimerRef.current)
+      micPromptTimerRef.current = null
+    }
+  }, [])
+
+  // Cleanup mic & pending timers ONLY when leaving the code page (depends only on stable callbacks)
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
+      cancelMicPrompt()
       if (checkTimerRef.current) {
         clearTimeout(checkTimerRef.current)
         checkTimerRef.current = null
       }
-      voice.stopMic()
+      voiceStopMic()
     }
-  }, [voice])
+  }, [cancelMicPrompt, voiceStopMic])
 
   // Live 1s countdown ticker for outWait lock screen
   const checkoutRemainSec =
@@ -93,7 +115,7 @@ export default function StudentCodePage() {
   const startCodeListening = useCallback(() => {
     if (!mountedRef.current || stateRef.current.courseConfirm) return
     setCodeError('')
-    voice.listen({
+    voiceListen({
       onStatus: (msg) => {
         if (mountedRef.current) setStatusMsg(msg)
       },
@@ -106,7 +128,7 @@ export default function StudentCodePage() {
         if (mountedRef.current) onSpokenCodeRef.current?.(transcript)
       },
     })
-  }, [voice])
+  }, [voiceListen])
 
   // Announce code step & auto-open mic when arriving via goToStep
   const announceToken = location.state?.announceToken
@@ -309,16 +331,43 @@ export default function StudentCodePage() {
   }, [handleSpokenCode])
 
   const handleToggleListen = useCallback(() => {
-    if (voice.listening) {
-      voice.stopMic()
-      setStatusMsg('')
+    if (listening || micPendingRef.current) {
+      cancelMicPrompt()
+      voiceStop()
+      setStatusMsg('หยุดรับฟังแล้ว')
       return
     }
-    startCodeListening()
-  }, [startCodeListening, voice])
+
+    setCodeError('')
+    if (!autoVoice) {
+      startCodeListening()
+      return
+    }
+
+    cancelMicPrompt()
+    micPendingRef.current = true
+    setMicPrompting(true)
+    setStatusMsg('พูดได้เลยครับ...')
+
+    const beginListening = () => {
+      if (!micPendingRef.current || !mountedRef.current) return
+      cancelMicPrompt()
+      startCodeListening()
+    }
+
+    voiceSpeak('พูดได้เลยครับ', {
+      onEnd: () => {
+        if (!micPendingRef.current || !mountedRef.current) return
+        if (micPromptTimerRef.current) clearTimeout(micPromptTimerRef.current)
+        micPromptTimerRef.current = setTimeout(beginListening, 250)
+      },
+    })
+    micPromptTimerRef.current = setTimeout(beginListening, 2500)
+  }, [autoVoice, cancelMicPrompt, listening, startCodeListening, voiceSpeak, voiceStop])
 
   const handleDigitPress = useCallback(
     (digit) => {
+      cancelMicPrompt()
       voice.stopMic()
       setCodeError('')
       setStatusMsg('')
@@ -332,10 +381,11 @@ export default function StudentCodePage() {
         return next
       })
     },
-    [scheduleCodeCheck, voice],
+    [cancelMicPrompt, scheduleCodeCheck, voice],
   )
 
   const handleClearCode = useCallback(() => {
+    cancelMicPrompt()
     if (checkTimerRef.current) {
       clearTimeout(checkTimerRef.current)
       checkTimerRef.current = null
@@ -345,9 +395,10 @@ export default function StudentCodePage() {
     setCode('')
     setCodeError('')
     setStatusMsg('')
-  }, [voice])
+  }, [cancelMicPrompt, voice])
 
   const handleBackspaceCode = useCallback(() => {
+    cancelMicPrompt()
     if (checkTimerRef.current) {
       clearTimeout(checkTimerRef.current)
       checkTimerRef.current = null
@@ -359,7 +410,7 @@ export default function StudentCodePage() {
       stateRef.current.code = next
       return next
     })
-  }, [voice])
+  }, [cancelMicPrompt, voice])
 
   // Support physical keyboard input (0-9, Backspace, Escape) for desktop & kiosk UX
   useEffect(() => {
@@ -470,7 +521,7 @@ export default function StudentCodePage() {
       code={code}
       errorText={codeError}
       statusMsg={statusMsg}
-      listening={voice.listening}
+      listening={voice.listening || micPrompting}
       onListenCode={handleToggleListen}
       onDigitPress={handleDigitPress}
       onClearCode={handleClearCode}

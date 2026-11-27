@@ -22,13 +22,44 @@ export default function StudentPhonePage() {
   const [phoneSubStep, setPhoneSubStep] = useState('say') // 'say' | 'conf' | 'car'
   const [typedPhone, setTypedPhone] = useState('')
   const [statusMsg, setStatusMsg] = useState('')
+  const [micPrompting, setMicPrompting] = useState(false)
 
   const swipeHeadingRef = useRef(null)
   const autoVoiceRef = useRef(voice.autoVoice)
+  const mountedRef = useRef(true)
+  const micPendingRef = useRef(false)
+  const micPromptTimerRef = useRef(null)
+
+  const {
+    autoVoice,
+    listening,
+    listen: voiceListen,
+    speak: voiceSpeak,
+    stop: voiceStop,
+    stopMic: voiceStopMic,
+  } = voice
+
+  const cancelMicPrompt = useCallback(() => {
+    micPendingRef.current = false
+    setMicPrompting(false)
+    if (micPromptTimerRef.current) {
+      clearTimeout(micPromptTimerRef.current)
+      micPromptTimerRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
-    autoVoiceRef.current = voice.autoVoice
-  }, [voice.autoVoice])
+    autoVoiceRef.current = autoVoice
+  }, [autoVoice])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      cancelMicPrompt()
+      voiceStopMic()
+    }
+  }, [cancelMicPrompt, voiceStopMic])
 
   useEffect(() => {
     if (phoneSubStep === 'conf') {
@@ -38,6 +69,7 @@ export default function StudentPhonePage() {
 
   const handlePhoneInput = useCallback(
     (rawText) => {
+      cancelMicPrompt()
       const d = digitsOf(rawText)
       if (!isValidThaiPhone(d)) {
         const msg = `ได้ยินเป็น ${d || 'ไม่มีตัวเลข'} ไม่ครบสิบหลัก ลองพูดใหม่`
@@ -50,34 +82,84 @@ export default function StudentPhonePage() {
       setPhoneSubStep('conf')
       voice.speak(`เบอร์ ${spellDigits(d)} ถูกต้องไหม ปัดขวาเพื่อยืนยัน ปัดซ้ายเพื่อแก้ไข`)
     },
-    [setPhone, voice],
+    [cancelMicPrompt, setPhone, voice],
   )
 
+  const startPhoneListening = useCallback(() => {
+    if (!mountedRef.current) return
+    voiceListen({
+      onStatus: (msg) => {
+        if (mountedRef.current) setStatusMsg(msg)
+      },
+      onInterim: (interim) => {
+        if (!mountedRef.current) return
+        const heard = digitsOf(interim)
+        setStatusMsg(heard ? `กำลังฟัง: ${heard}` : `กำลังฟัง: "${interim}"`)
+      },
+      onResult: (transcript) => {
+        if (mountedRef.current) handlePhoneInput(transcript)
+      },
+    })
+  }, [handlePhoneInput, voiceListen])
+
+  const handleTogglePhoneListen = useCallback(() => {
+    if (listening || micPendingRef.current) {
+      cancelMicPrompt()
+      voiceStop()
+      setStatusMsg('หยุดรับฟังแล้ว')
+      return
+    }
+
+    if (!autoVoice) {
+      startPhoneListening()
+      return
+    }
+
+    cancelMicPrompt()
+    micPendingRef.current = true
+    setMicPrompting(true)
+    setStatusMsg('พูดได้เลยครับ...')
+
+    const beginListening = () => {
+      if (!micPendingRef.current || !mountedRef.current) return
+      cancelMicPrompt()
+      startPhoneListening()
+    }
+
+    voiceSpeak('พูดได้เลยครับ', {
+      onEnd: () => {
+        if (!micPendingRef.current || !mountedRef.current) return
+        if (micPromptTimerRef.current) clearTimeout(micPromptTimerRef.current)
+        micPromptTimerRef.current = setTimeout(beginListening, 250)
+      },
+    })
+    micPromptTimerRef.current = setTimeout(beginListening, 2500)
+  }, [autoVoice, cancelMicPrompt, listening, startPhoneListening, voiceSpeak, voiceStop])
+
   const handlePhoneEdit = useCallback(() => {
+    cancelMicPrompt()
     setPhone('')
     setPhoneSubStep('say')
     if (autoVoiceRef.current) {
       voice.speak('พูดเบอร์ใหม่ได้เลย', {
         promptKey: 'phone_edit',
         onEnd: () => {
-          if (autoVoiceRef.current) {
-            voice.listen({
-              onStatus: setStatusMsg,
-              onResult: handlePhoneInput,
-            })
+          if (mountedRef.current && autoVoiceRef.current) {
+            startPhoneListening()
           }
         },
       })
     }
-  }, [handlePhoneInput, setPhone, voice])
+  }, [cancelMicPrompt, setPhone, startPhoneListening, voice])
 
   const handlePhoneConfirm = useCallback(() => {
+    cancelMicPrompt()
     setPhoneSubStep('car')
     voice.speak(
       'ยืนยันเบอร์แล้ว แตะมุมจอที่เป็นเครือข่ายของคุณ ซ้ายบนเอไอเอส ขวาบนทรู ซ้ายล่างดีแทค ขวาล่างเครือข่ายอื่น แตะซ้ำเพื่อยืนยัน',
       { promptKey: 'carrier_intro' },
     )
-  }, [voice])
+  }, [cancelMicPrompt, voice])
 
   const handlePickCarrier = (nextCarrier) => {
     if (carrier === nextCarrier) {
@@ -135,14 +217,9 @@ export default function StudentPhonePage() {
     <PhoneStep
       typedPhone={typedPhone}
       statusMsg={statusMsg}
-      listening={voice.listening}
+      listening={voice.listening || micPrompting}
       onTypedPhoneChange={(val) => setTypedPhone(val.replace(/\D/g, '').slice(0, 10))}
-      onListenPhone={() =>
-        voice.listen({
-          onStatus: setStatusMsg,
-          onResult: handlePhoneInput,
-        })
-      }
+      onListenPhone={handleTogglePhoneListen}
       onSimulatePhoneSpeech={() =>
         handlePhoneInput('ศูนย์ แปด หนึ่ง สอง สาม สี่ ห้า หก เจ็ด แปด')
       }

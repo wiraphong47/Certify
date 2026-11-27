@@ -158,7 +158,7 @@ export default function StudentScanPage() {
           throw exactErr
         }
 
-        // Fallback: explicitly look for a rear camera by label only
+        // Fallback: explicitly look for primary rear camera by label (handles multi-lens Android)
         let cameras = []
         try {
           cameras = await Html5Qrcode.getCameras()
@@ -166,16 +166,25 @@ export default function StudentScanPage() {
           cameras = []
         }
 
-        const rearCamera = cameras.find(
+        const rearCameras = cameras.filter(
           (c) =>
             /back|rear|environment|หลัง/i.test(c.label || '') &&
             !/front|user|หน้า/i.test(c.label || ''),
         )
-        if (!rearCamera) {
+        const preferredRear =
+          rearCameras.find(
+            (c) =>
+              /camera2\s*0|main|wide/i.test(c.label || '') &&
+              !/ultra|macro|tele|depth|tof/i.test(c.label || ''),
+          ) ||
+          rearCameras.find((c) => !/ultra|macro|tele|depth|tof/i.test(c.label || '')) ||
+          rearCameras[0]
+
+        if (!preferredRear) {
           throw new Error('no_rear_camera')
         }
 
-        await startScannerWithTarget(rearCamera.id)
+        await startScannerWithTarget(preferredRear.id)
         setScanStatusMsg('เล็งกล้องหลังไปที่ QR Code เพื่อเข้าสู่หน้า ThaID')
       }
     } catch (err) {
