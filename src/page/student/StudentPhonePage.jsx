@@ -1,0 +1,182 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
+import CarrierQuadrantStep from '../../components/student/CarrierQuadrantStep'
+import PhoneStep from '../../components/student/PhoneStep'
+import SwipeConfirmStep from '../../components/student/SwipeConfirmStep'
+import { useCertify } from '../../context/certify'
+import { useSwipe } from '../../hooks/useSwipe'
+import { formatPhone, isValidThaiPhone } from '../../utils/formatters'
+import { CARRIER_SPEECH, digitsOf, parseCarrierSpeech, spellDigits } from '../../utils/thaiSpeech'
+
+export default function StudentPhonePage() {
+  const { showToast } = useCertify()
+  const {
+    steps,
+    voice,
+    phone,
+    setPhone,
+    carrier,
+    setCarrier,
+    setSkippedNet,
+    goToStep,
+  } = useOutletContext()
+
+  const [phoneSubStep, setPhoneSubStep] = useState('say') // 'say' | 'conf' | 'car'
+  const [typedPhone, setTypedPhone] = useState('')
+  const [statusMsg, setStatusMsg] = useState('')
+
+  const swipeHeadingRef = useRef(null)
+  const autoVoiceRef = useRef(voice.autoVoice)
+
+  useEffect(() => {
+    autoVoiceRef.current = voice.autoVoice
+  }, [voice.autoVoice])
+
+  useEffect(() => {
+    if (phoneSubStep === 'conf') {
+      swipeHeadingRef.current?.focus()
+    }
+  }, [phoneSubStep, phone])
+
+  const handlePhoneInput = useCallback(
+    (rawText) => {
+      const d = digitsOf(rawText)
+      if (!isValidThaiPhone(d)) {
+        const msg = `ได้ยินเป็น ${d || 'ไม่มีตัวเลข'} ไม่ครบสิบหลัก ลองพูดใหม่`
+        setStatusMsg(msg)
+        voice.speak(msg)
+        return
+      }
+      setPhone(d)
+      setStatusMsg('')
+      setPhoneSubStep('conf')
+      voice.speak(`เบอร์ ${spellDigits(d)} ถูกต้องไหม ปัดขวาเพื่อยืนยัน ปัดซ้ายเพื่อแก้ไข`)
+    },
+    [setPhone, voice],
+  )
+
+  const handlePhoneEdit = useCallback(() => {
+    setPhone('')
+    setPhoneSubStep('say')
+    if (autoVoiceRef.current) {
+      voice.speak('พูดเบอร์ใหม่ได้เลย', {
+        promptKey: 'phone_edit',
+        onEnd: () => {
+          if (autoVoiceRef.current) {
+            voice.listen({
+              onStatus: setStatusMsg,
+              onResult: handlePhoneInput,
+            })
+          }
+        },
+      })
+    }
+  }, [handlePhoneInput, setPhone, voice])
+
+  const handlePhoneConfirm = useCallback(() => {
+    setPhoneSubStep('car')
+    voice.speak(
+      'ยืนยันเบอร์แล้ว แตะมุมจอที่เป็นเครือข่ายของคุณ ซ้ายบนเอไอเอส ขวาบนทรู ซ้ายล่างดีแทค ขวาล่างเครือข่ายอื่น แตะซ้ำเพื่อยืนยัน',
+      { promptKey: 'carrier_intro' },
+    )
+  }, [voice])
+
+  const handlePickCarrier = (nextCarrier) => {
+    if (carrier === nextCarrier) {
+      setSkippedNet(false)
+      goToStep(steps.length - 1, { carrierOverride: nextCarrier, skippedOverride: false })
+      return
+    }
+    setCarrier(nextCarrier)
+    voice.speak(`เลือก ${CARRIER_SPEECH[nextCarrier]} แตะอีกครั้งเพื่อยืนยัน และรับเน็ตฟรี`)
+  }
+
+  const handleSpokenCarrier = (transcript) => {
+    const found = parseCarrierSpeech(transcript)
+    if (found) {
+      handlePickCarrier(found)
+    } else {
+      const msg = 'ไม่แน่ใจว่าเครือข่ายไหน ลองพูดอีกครั้ง'
+      setStatusMsg(msg)
+      voice.speak(msg)
+    }
+  }
+
+  const handleSkipNet = () => {
+    if (!isValidThaiPhone(phone)) {
+      showToast('กรอกเบอร์ให้ครบ 10 หลักก่อนข้าม', 'warning')
+      return
+    }
+    setSkippedNet(true)
+    goToStep(steps.length - 1, { carrierOverride: carrier, skippedOverride: true })
+  }
+
+  const swipe = useSwipe({
+    onSwipeRight: handlePhoneConfirm,
+    onSwipeLeft: handlePhoneEdit,
+  })
+  const leftOpacity =
+    swipe.dx < 0 ? 0.35 + 0.65 * swipe.progress : swipe.dx > 0 ? 0.35 * (1 - swipe.progress) : 0.35
+  const rightOpacity =
+    swipe.dx > 0 ? 0.35 + 0.65 * swipe.progress : swipe.dx < 0 ? 0.35 * (1 - swipe.progress) : 0.35
+
+  if (phoneSubStep === 'conf') {
+    return (
+      <SwipeConfirmStep
+        title="ฟังเบอร์ให้ถูกต้อง"
+        mainText={formatPhone(phone)}
+        mainFontSize="clamp(26px, 8vw, 34px)"
+        letterSpacing={3}
+        yesLabel="ถูกต้อง ยืนยันเบอร์"
+        noLabel="ผิด แก้ไขเบอร์ แล้วพูดใหม่"
+        headingRef={swipeHeadingRef}
+        leftOpacity={leftOpacity}
+        rightOpacity={rightOpacity}
+        readyDir={swipe.readyDir}
+        clampedTranslate={swipe.clampedTranslate}
+        isDragging={swipe.dx !== 0}
+        swipeHandlers={swipe.bindHandlers}
+        onAccessibleConfirm={() => swipe.guardTap(handlePhoneConfirm)}
+        onAccessibleEdit={() => swipe.guardTap(handlePhoneEdit)}
+      />
+    )
+  }
+
+  if (phoneSubStep === 'car') {
+    return (
+      <CarrierQuadrantStep
+        phone={phone}
+        carrier={carrier}
+        statusMsg={statusMsg}
+        listening={voice.listening}
+        onPickCarrier={handlePickCarrier}
+        onListenCarrier={() =>
+          voice.listen({
+            onStatus: setStatusMsg,
+            onResult: handleSpokenCarrier,
+          })
+        }
+        onSkip={handleSkipNet}
+      />
+    )
+  }
+
+  return (
+    <PhoneStep
+      typedPhone={typedPhone}
+      statusMsg={statusMsg}
+      listening={voice.listening}
+      onTypedPhoneChange={(val) => setTypedPhone(val.replace(/\D/g, '').slice(0, 10))}
+      onListenPhone={() =>
+        voice.listen({
+          onStatus: setStatusMsg,
+          onResult: handlePhoneInput,
+        })
+      }
+      onSimulatePhoneSpeech={() =>
+        handlePhoneInput('ศูนย์ แปด หนึ่ง สอง สาม สี่ ห้า หก เจ็ด แปด')
+      }
+      onSubmitTypedPhone={() => handlePhoneInput(typedPhone)}
+    />
+  )
+}
