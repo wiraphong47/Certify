@@ -2,11 +2,11 @@ import QRCode from 'qrcode'
 import { loadDb, saveDb } from './storageService.js'
 
 export function buildUniversalQrUrl(qrVersion) {
-  const origin =
-    typeof window !== 'undefined' && window.location?.origin
-      ? window.location.origin
-      : 'https://certify.local'
-  return `${origin}/student?qr=v${qrVersion}`
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const basePath = window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '')
+    return `${window.location.origin}${basePath}/#/student?qr=v${qrVersion}`
+  }
+  return `https://certify.local/#/student?qr=v${qrVersion}`
 }
 
 export async function generateQrDataUrl(text) {
@@ -27,6 +27,18 @@ export async function rotateUniversalQr() {
   return { ok: true, qrVersion: saved.qrVersion, db: saved }
 }
 
+function extractQrParam(url) {
+  const direct = url.searchParams.get('qr')
+  if (direct) return direct
+  const hash = url.hash || ''
+  const qIdx = hash.indexOf('?')
+  if (qIdx >= 0) {
+    const hashParams = new URLSearchParams(hash.slice(qIdx + 1))
+    return hashParams.get('qr')
+  }
+  return null
+}
+
 export function validateScannedQrPayload(decodedText, currentVersion) {
   const raw = String(decodedText || '').trim()
   if (!raw) {
@@ -35,7 +47,7 @@ export function validateScannedQrPayload(decodedText, currentVersion) {
 
   try {
     const url = new URL(raw)
-    const qrParam = url.searchParams.get('qr')
+    const qrParam = extractQrParam(url)
     if (qrParam) {
       const versionNum = Number.parseInt(qrParam.replace(/^v/i, ''), 10)
       if (!Number.isNaN(versionNum) && currentVersion && versionNum !== currentVersion) {

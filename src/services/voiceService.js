@@ -6,20 +6,22 @@
  * - Dynamic prompts or missing clips automatically fall back to Web Speech API.
  */
 
+const AUDIO_BASE = `${import.meta.env.BASE_URL}audio/th/`
+
 const AUDIO_CLIP_MAP = {
-  scan: '/audio/th/scan.mp3',
-  scan_loading: '/audio/th/scan_loading.mp3',
-  scan_gallery: '/audio/th/scan_gallery.mp3',
-  scan_ok: '/audio/th/scan_ok.mp3',
-  thaid: '/audio/th/thaid.mp3',
-  checkin: '/audio/th/checkin.mp3',
-  checkout: '/audio/th/checkout.mp3',
-  checkout_general: '/audio/th/checkout_general.mp3',
-  checkout_wait: '/audio/th/checkout_wait.mp3',
-  phone: '/audio/th/phone.mp3',
-  phone_edit: '/audio/th/phone_edit.mp3',
-  carrier_intro: '/audio/th/carrier_intro.mp3',
-  cert: '/audio/th/cert.mp3',
+  scan: `${AUDIO_BASE}scan.mp3`,
+  scan_loading: `${AUDIO_BASE}scan_loading.mp3`,
+  scan_gallery: `${AUDIO_BASE}scan_gallery.mp3`,
+  scan_ok: `${AUDIO_BASE}scan_ok.mp3`,
+  thaid: `${AUDIO_BASE}thaid.mp3`,
+  checkin: `${AUDIO_BASE}checkin.mp3`,
+  checkout: `${AUDIO_BASE}checkout.mp3`,
+  checkout_general: `${AUDIO_BASE}checkout_general.mp3`,
+  checkout_wait: `${AUDIO_BASE}checkout_wait.mp3`,
+  phone: `${AUDIO_BASE}phone.mp3`,
+  phone_edit: `${AUDIO_BASE}phone_edit.mp3`,
+  carrier_intro: `${AUDIO_BASE}carrier_intro.mp3`,
+  cert: `${AUDIO_BASE}cert.mp3`,
 }
 
 const missingClips = new Set()
