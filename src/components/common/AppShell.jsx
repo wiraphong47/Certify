@@ -18,6 +18,7 @@ export default function AppShell({
   showLoginAction,
   onToggleMode,
   onResetDemo,
+  onGoHome,
   onGoLogin,
   children,
 }) {
@@ -38,8 +39,8 @@ export default function AppShell({
                 <Box
                   component="button"
                   type="button"
-                  onClick={onGoLogin}
-                  aria-label="กลับหน้าเข้าสู่ระบบ Certify"
+                  onClick={onGoHome}
+                  aria-label="กลับหน้าหลัก Certify"
                   sx={(theme) => ({
                     bgcolor: theme.palette.certify.sun,
                     color: '#0C2F53',

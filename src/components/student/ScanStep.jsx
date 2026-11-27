@@ -1,8 +1,7 @@
 import CameraAltIcon from '@mui/icons-material/CameraAlt'
-import CameraswitchIcon from '@mui/icons-material/Cameraswitch'
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import { Alert, Box, Button, Chip, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Stack, Typography } from '@mui/material'
 
 const SCAN_CORNERS = [
   { top: 24, left: 24, borderRight: 0, borderBottom: 0, borderRadius: '8px 0 0 0' },
@@ -15,12 +14,9 @@ export default function ScanStep({
   scanMode,
   statusMsg,
   cameraError,
-  activeCameraLabel,
-  canSwitchCamera,
   fileInputRef,
   onStartLiveCamera,
   onCameraBoxKeyDown,
-  onSwitchCamera,
   onStartDemoScan,
   onCancelScan,
   onTriggerGallery,
@@ -47,8 +43,8 @@ export default function ScanStep({
           onKeyDown={scanMode === 'idle' ? onCameraBoxKeyDown : undefined}
           aria-label={
             scanMode === 'idle'
-              ? 'แตะที่ไหนก็ได้บนกรอบกล้องเพื่อเริ่มสแกน QR'
-              : 'หน้าจอกล้องสแกน QR'
+              ? 'แตะที่ไหนก็ได้บนกรอบกล้องเพื่อเริ่มสแกน QR ด้วยกล้องหลัง'
+              : 'หน้าจอกล้องหลังสแกน QR'
           }
           sx={(theme) => ({
             position: 'relative',
@@ -121,24 +117,6 @@ export default function ScanStep({
               })}
             />
           )}
-
-          {/* Active camera label pill */}
-          {scanMode === 'camera' && activeCameraLabel && (
-            <Chip
-              label={activeCameraLabel}
-              size="small"
-              sx={{
-                position: 'absolute',
-                top: 10,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                zIndex: 3,
-                bgcolor: 'rgba(12, 47, 83, 0.78)',
-                color: '#fff',
-                maxWidth: '85%',
-              }}
-            />
-          )}
         </Box>
 
         {scanMode === 'idle' ? (
@@ -146,7 +124,7 @@ export default function ScanStep({
             component="button"
             type="button"
             onClick={onStartLiveCamera}
-            aria-label="แตะที่ไหนก็ได้บนหน้าจอเพื่อเริ่มสแกน QR"
+            aria-label="แตะที่ไหนก็ได้บนหน้าจอเพื่อเริ่มสแกน QR ด้วยกล้องหลัง"
             sx={{
               border: 0,
               bgcolor: 'transparent',
@@ -162,7 +140,7 @@ export default function ScanStep({
               เพื่อเริ่มสแกน QR
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              แตะหน้าจอเพื่อเปิดกล้องสแกน QR เข้าสู่หน้า ThaID
+              แตะหน้าจอเพื่อเปิดกล้องหลังสแกน QR เข้าสู่หน้า ThaID
             </Typography>
           </Box>
         ) : (
@@ -179,16 +157,6 @@ export default function ScanStep({
               useFlexGap
               sx={{ justifyContent: 'center', flexWrap: 'wrap' }}
             >
-              {scanMode === 'camera' && canSwitchCamera && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<CameraswitchIcon />}
-                  onClick={onSwitchCamera}
-                >
-                  สลับกล้อง
-                </Button>
-              )}
               <Button variant="contained" color="secondary" size="small" onClick={onStartDemoScan}>
                 จำลองว่าสแกนสำเร็จ
               </Button>

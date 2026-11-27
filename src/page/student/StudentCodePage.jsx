@@ -35,6 +35,8 @@ export default function StudentCodePage() {
   const swipeHeadingRef = useRef(null)
   const onSpokenCodeRef = useRef(null)
   const lastAnnouncedTokenRef = useRef(null)
+  const mountedRef = useRef(true)
+  const checkTimerRef = useRef(null)
 
   const isCiStep = currentStep.id === 'checkin'
   const isCourseSwipeActive = courseConfirm && Boolean(matchedCourse)
@@ -42,17 +44,30 @@ export default function StudentCodePage() {
   const stateRef = useRef({
     stepId: currentStep.id,
     courseConfirm,
-    codeLength: code.length,
+    code,
     autoVoice: voice.autoVoice,
   })
   useEffect(() => {
     stateRef.current = {
       stepId: currentStep.id,
       courseConfirm,
-      codeLength: code.length,
+      code,
       autoVoice: voice.autoVoice,
     }
-  }, [currentStep.id, courseConfirm, code.length, voice.autoVoice])
+  }, [currentStep.id, courseConfirm, code, voice.autoVoice])
+
+  // Cleanup mic & pending timers whenever leaving the code page
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (checkTimerRef.current) {
+        clearTimeout(checkTimerRef.current)
+        checkTimerRef.current = null
+      }
+      voice.stopMic()
+    }
+  }, [voice])
 
   // Live 1s countdown ticker for outWait lock screen
   const checkoutRemainSec =
@@ -75,11 +90,36 @@ export default function StudentCodePage() {
     }
   }, [isCourseSwipeActive, matchedCourse?.id])
 
+  const startCodeListening = useCallback(() => {
+    if (!mountedRef.current || stateRef.current.courseConfirm) return
+    setCodeError('')
+    voice.listen({
+      onStatus: (msg) => {
+        if (mountedRef.current) setStatusMsg(msg)
+      },
+      onInterim: (interim) => {
+        if (!mountedRef.current) return
+        const heard = digitsOf(interim)
+        setStatusMsg(heard ? `กำลังฟัง: ${heard}` : `กำลังฟัง: "${interim}"`)
+      },
+      onResult: (transcript) => {
+        if (mountedRef.current) onSpokenCodeRef.current?.(transcript)
+      },
+    })
+  }, [voice])
+
   // Announce code step & auto-open mic when arriving via goToStep
   const announceToken = location.state?.announceToken
   useEffect(() => {
     if (!announceToken || lastAnnouncedTokenRef.current === announceToken) return
     lastAnnouncedTokenRef.current = announceToken
+
+    if (checkTimerRef.current) {
+      clearTimeout(checkTimerRef.current)
+      checkTimerRef.current = null
+    }
+    stateRef.current.code = ''
+    stateRef.current.courseConfirm = false
 
     setCode('')
     setCodeError('')
@@ -105,25 +145,35 @@ export default function StudentCodePage() {
       onEnd: () => {
         const cur = stateRef.current
         if (
+          mountedRef.current &&
           cur.autoVoice &&
           (cur.stepId === 'checkin' || cur.stepId === 'checkout') &&
           !cur.courseConfirm &&
-          cur.codeLength < 4
+          cur.code.length < 4
         ) {
-          voice.listen({
-            onStatus: setStatusMsg,
-            onResult: (transcript) => onSpokenCodeRef.current?.(transcript),
-          })
+          startCodeListening()
         }
       },
     })
-  }, [activeCourse, announceToken, currentStep.id, currentStep.promptKey, currentStep.vo, db.checkedIn, voice])
+  }, [
+    activeCourse,
+    announceToken,
+    currentStep.id,
+    currentStep.promptKey,
+    currentStep.vo,
+    db.checkedIn,
+    startCodeListening,
+    voice,
+  ])
 
   const handleCheckCode = useCallback(
     (digits) => {
+      if (!mountedRef.current) return
       voice.stopMic()
+      setStatusMsg('')
       const res = verifyStudentCode(digits, db.courses, db.checkedIn, currentStep.id)
       if (!res.ok) {
+        stateRef.current.code = ''
         setCode('')
         setMatchedCourseId(null)
         setCourseConfirm(false)
@@ -148,6 +198,7 @@ export default function StudentCodePage() {
       }
 
       if (res.skipConfirm) {
+        stateRef.current.code = ''
         setCode('')
         setCourseConfirm(false)
         goToStep(res.course.hasNet === false ? 'cert' : 'phone', { courseOverride: res.course })
@@ -175,56 +226,162 @@ export default function StudentCodePage() {
     ],
   )
 
+  const scheduleCodeCheck = useCallback(
+    (digits) => {
+      if (checkTimerRef.current) clearTimeout(checkTimerRef.current)
+      checkTimerRef.current = setTimeout(() => {
+        checkTimerRef.current = null
+        if (mountedRef.current && !stateRef.current.courseConfirm) {
+          handleCheckCode(digits)
+        }
+      }, 280)
+    },
+    [handleCheckCode],
+  )
+
   const handleSpokenCode = useCallback(
     (transcript) => {
-      if (stateRef.current.courseConfirm) return
+      if (!mountedRef.current || stateRef.current.courseConfirm) return
+      setCodeError('')
       const d = digitsOf(transcript)
-      if (d.length !== 4) {
-        const msg = `ได้ยินเป็น ${d ? spellDigits(d) : 'ไม่มีตัวเลข'} ไม่ครบสี่หลัก ลองพูดใหม่`
+
+      if (!d) {
+        const msg = 'ไม่ได้ยินตัวเลข ลองพูดใหม่อีกครั้ง'
         setStatusMsg(msg)
-        voice.speak(msg, {
+        if (stateRef.current.autoVoice) {
+          voice.speak(msg, {
+            onEnd: () => {
+              const cur = stateRef.current
+              if (
+                mountedRef.current &&
+                cur.autoVoice &&
+                (cur.stepId === 'checkin' || cur.stepId === 'checkout') &&
+                !cur.courseConfirm &&
+                cur.code.length < 4
+              ) {
+                startCodeListening()
+              }
+            },
+          })
+        }
+        return
+      }
+
+      // If user spoke 4+ digits in one go, take the last/first 4 digits cleanly;
+      // if 1-3 digits, accumulate onto the existing code so speaking digit-by-digit works!
+      const nextCode =
+        d.length >= 4 ? d.slice(0, 4) : `${stateRef.current.code}${d}`.slice(0, 4)
+
+      stateRef.current.code = nextCode
+      setCode(nextCode)
+
+      if (nextCode.length === 4) {
+        setStatusMsg(`ได้ยินครบ 4 หลัก (${nextCode}) กำลังตรวจสอบ...`)
+        scheduleCodeCheck(nextCode)
+        return
+      }
+
+      const remain = 4 - nextCode.length
+      const msg = `ได้ยิน ${spellDigits(d)} (เหลืออีก ${remain} หลัก พูดต่อได้เลย)`
+      setStatusMsg(msg)
+      if (stateRef.current.autoVoice) {
+        voice.speak(`ได้ยิน ${spellDigits(d)} เหลืออีก ${remain} หลัก พูดต่อได้เลย`, {
           onEnd: () => {
             const cur = stateRef.current
             if (
+              mountedRef.current &&
               cur.autoVoice &&
               (cur.stepId === 'checkin' || cur.stepId === 'checkout') &&
-              !cur.courseConfirm
+              !cur.courseConfirm &&
+              cur.code.length < 4
             ) {
-              voice.listen({
-                onStatus: setStatusMsg,
-                onResult: (t) => onSpokenCodeRef.current?.(t),
-              })
+              startCodeListening()
             }
           },
         })
-        return
       }
-      setCode(d)
-      setTimeout(() => {
-        if (!stateRef.current.courseConfirm) {
-          handleCheckCode(d)
-        }
-      }, 300)
     },
-    [handleCheckCode, voice],
+    [scheduleCodeCheck, startCodeListening, voice],
   )
 
   useEffect(() => {
     onSpokenCodeRef.current = handleSpokenCode
   }, [handleSpokenCode])
 
-  const handleDigitPress = (digit) => {
+  const handleToggleListen = useCallback(() => {
+    if (voice.listening) {
+      voice.stopMic()
+      setStatusMsg('')
+      return
+    }
+    startCodeListening()
+  }, [startCodeListening, voice])
+
+  const handleDigitPress = useCallback(
+    (digit) => {
+      voice.stopMic()
+      setCodeError('')
+      setStatusMsg('')
+      setCode((prev) => {
+        if (prev.length >= 4) return prev
+        const next = prev + digit
+        stateRef.current.code = next
+        if (next.length === 4) {
+          scheduleCodeCheck(next)
+        }
+        return next
+      })
+    },
+    [scheduleCodeCheck, voice],
+  )
+
+  const handleClearCode = useCallback(() => {
+    if (checkTimerRef.current) {
+      clearTimeout(checkTimerRef.current)
+      checkTimerRef.current = null
+    }
+    voice.stopMic()
+    stateRef.current.code = ''
+    setCode('')
+    setCodeError('')
+    setStatusMsg('')
+  }, [voice])
+
+  const handleBackspaceCode = useCallback(() => {
+    if (checkTimerRef.current) {
+      clearTimeout(checkTimerRef.current)
+      checkTimerRef.current = null
+    }
     voice.stopMic()
     setCodeError('')
     setCode((prev) => {
-      if (prev.length >= 4) return prev
-      const next = prev + digit
-      if (next.length === 4) {
-        setTimeout(() => handleCheckCode(next), 300)
-      }
+      const next = prev.slice(0, -1)
+      stateRef.current.code = next
       return next
     })
-  }
+  }, [voice])
+
+  // Support physical keyboard input (0-9, Backspace, Escape) for desktop & kiosk UX
+  useEffect(() => {
+    if (isCourseSwipeActive || checkoutRemainSec > 0) return undefined
+    const onKeyDown = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault()
+        handleDigitPress(e.key)
+      } else if (e.key === 'Backspace') {
+        e.preventDefault()
+        handleBackspaceCode()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        handleClearCode()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [checkoutRemainSec, handleBackspaceCode, handleClearCode, handleDigitPress, isCourseSwipeActive])
 
   const handleConfirmCourseYes = useCallback(async () => {
     setCourseConfirm(false)
@@ -237,10 +394,12 @@ export default function StudentCodePage() {
           : 'Check-in เริ่มเรียนสำเร็จ! กรอกรหัส Check-out เมื่อเรียนจบ',
         'success',
       )
+      stateRef.current.code = ''
       setCode('')
       goToStep('checkout', { courseOverride: matchedCourse })
       return
     }
+    stateRef.current.code = ''
     setCode('')
     goToStep(matchedCourse?.hasNet === false ? 'cert' : 'phone', {
       courseOverride: matchedCourse,
@@ -250,7 +409,9 @@ export default function StudentCodePage() {
   const handleConfirmCourseNo = useCallback(() => {
     setCourseConfirm(false)
     setMatchedCourseId(null)
+    stateRef.current.code = ''
     setCode('')
+    setStatusMsg('')
     if (voice.autoVoice) voice.speak('กรุณาใส่รหัสหลักสูตรอีกครั้ง')
   }, [setMatchedCourseId, voice])
 
@@ -310,15 +471,10 @@ export default function StudentCodePage() {
       errorText={codeError}
       statusMsg={statusMsg}
       listening={voice.listening}
-      onListenCode={() =>
-        voice.listen({
-          onStatus: setStatusMsg,
-          onResult: handleSpokenCode,
-        })
-      }
+      onListenCode={handleToggleListen}
       onDigitPress={handleDigitPress}
-      onClearCode={() => setCode('')}
-      onBackspaceCode={() => setCode((prev) => prev.slice(0, -1))}
+      onClearCode={handleClearCode}
+      onBackspaceCode={handleBackspaceCode}
       onSimulateSampleSpeech={() => handleSpokenCode(spellDigits(sampleCode))}
       onUnlockWaitDemo={() => activeCourse && unlockCheckoutDemo(activeCourse.id)}
       onGoCheckinStep={() => goToStep('checkin')}

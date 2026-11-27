@@ -1,15 +1,57 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import ThaidStep from '../../components/student/ThaidStep'
 import { authenticateWithThaid } from '../../services/authService'
+import { fmtMMSS } from '../../utils/formatters'
+
+const THAID_MOCK_TTL_SEC = 60
+
+function generateRefCode() {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  const digits = '0123456789'
+  let out = ''
+  for (let i = 0; i < 4; i += 1) {
+    out += letters[Math.floor(Math.random() * letters.length)]
+  }
+  for (let i = 0; i < 2; i += 1) {
+    out += digits[Math.floor(Math.random() * digits.length)]
+  }
+  return out
+}
 
 export default function StudentThaidPage() {
   const { isCheckinMode, voice, setStudentName, goToStep } = useOutletContext()
-  const [manualMode, setManualMode] = useState(false)
+
+  const [viewMode, setViewMode] = useState('intro') // 'intro' | 'thaidMock' | 'manual'
+  const [mockRefCode, setMockRefCode] = useState('PLGR83')
+  const [mockRemainSec, setMockRemainSec] = useState(THAID_MOCK_TTL_SEC)
+
   const [fullName, setFullName] = useState('')
   const [nameError, setNameError] = useState('')
 
-  const handleConfirmThaid = async () => {
+  const startThaidMockSession = useCallback(() => {
+    setMockRefCode(generateRefCode())
+    setMockRemainSec(THAID_MOCK_TTL_SEC)
+  }, [])
+
+  // Live 1-second countdown timer on ThaID mockup screen
+  useEffect(() => {
+    if (viewMode !== 'thaidMock' || mockRemainSec <= 0) return undefined
+    const timer = setInterval(() => {
+      setMockRemainSec((prev) => Math.max(0, prev - 1))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [mockRemainSec, viewMode])
+
+  const handleOpenThaidMock = () => {
+    startThaidMockSession()
+    setViewMode('thaidMock')
+    if (voice.autoVoice) {
+      voice.speak('กรุณาสแกนคิวอาร์โค้ดด้วยแอป ไทยไอดี เมื่อสแกนเสร็จแล้ว กดปุ่ม สแกนเสร็จแล้ว ด้านล่าง')
+    }
+  }
+
+  const handleCompleteThaid = async () => {
     const res = await authenticateWithThaid()
     if (res.ok && res.user?.fullName) {
       setStudentName(res.user.fullName)
@@ -18,15 +60,15 @@ export default function StudentThaidPage() {
   }
 
   const handleOpenManual = () => {
-    setManualMode(true)
+    setViewMode('manual')
     setNameError('')
     if (voice.autoVoice) {
       voice.speak('กรุณากรอกชื่อและนามสกุล เพื่อดำเนินการต่อ')
     }
   }
 
-  const handleCloseManual = () => {
-    setManualMode(false)
+  const handleBackToIntro = () => {
+    setViewMode('intro')
     setNameError('')
   }
 
@@ -59,12 +101,17 @@ export default function StudentThaidPage() {
   return (
     <ThaidStep
       isCheckinMode={isCheckinMode}
-      manualMode={manualMode}
+      viewMode={viewMode}
+      mockRefCode={mockRefCode}
+      mockRemainText={fmtMMSS(mockRemainSec)}
+      mockExpired={mockRemainSec <= 0}
       fullName={fullName}
       nameError={nameError}
-      onConfirmThaid={handleConfirmThaid}
+      onOpenThaidMock={handleOpenThaidMock}
+      onCompleteThaid={handleCompleteThaid}
+      onRefreshThaidMock={startThaidMockSession}
+      onBackToIntro={handleBackToIntro}
       onOpenManual={handleOpenManual}
-      onCloseManual={handleCloseManual}
       onFullNameChange={handleFullNameChange}
       onSubmitManual={handleSubmitManual}
     />

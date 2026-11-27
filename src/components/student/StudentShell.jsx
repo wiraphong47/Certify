@@ -48,7 +48,7 @@ export default function StudentShell({
           mx: 'auto',
           border: '2px solid',
           borderColor: 'divider',
-          borderRadius: 7,
+          borderRadius: '26px',
           p: 2.5,
           minHeight: 650,
           display: 'flex',

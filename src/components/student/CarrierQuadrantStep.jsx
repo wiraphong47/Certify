@@ -1,5 +1,4 @@
-import MicIcon from '@mui/icons-material/Mic'
-import { Box, Button, IconButton, Typography } from '@mui/material'
+import { Box, Typography } from '@mui/material'
 import { CARRIER_LIST, CARRIER_SPEECH } from '../../utils/thaiSpeech'
 
 const QUAD_STYLES = [
@@ -13,10 +12,7 @@ export default function CarrierQuadrantStep({
   phone,
   carrier,
   statusMsg,
-  listening,
   onPickCarrier,
-  onListenCarrier,
-  onSkip,
 }) {
   return (
     <Box sx={{ position: 'relative', flex: 1, mx: -2.5, mb: -2.5, minHeight: 540 }}>
@@ -98,30 +94,6 @@ export default function CarrierQuadrantStep({
           </Typography>
         )}
       </Box>
-
-      <IconButton
-        onClick={onListenCarrier}
-        aria-label="พูดชื่อเครือข่าย"
-        sx={(theme) => ({
-          position: 'absolute',
-          left: '50%',
-          top: '48%',
-          transform: 'translate(-50%, -50%)',
-          width: 88,
-          height: 88,
-          border: `4px solid ${theme.palette.certify.sun}`,
-          bgcolor: listening ? 'success.main' : 'primary.main',
-          color: '#fff',
-          zIndex: 3,
-          '&:hover': {
-            bgcolor: 'primary.dark',
-          },
-        })}
-      >
-        <MicIcon sx={{ fontSize: 40 }} />
-      </IconButton>
-
-      
     </Box>
   )
 }

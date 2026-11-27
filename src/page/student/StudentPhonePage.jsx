@@ -3,13 +3,11 @@ import { useOutletContext } from 'react-router-dom'
 import CarrierQuadrantStep from '../../components/student/CarrierQuadrantStep'
 import PhoneStep from '../../components/student/PhoneStep'
 import SwipeConfirmStep from '../../components/student/SwipeConfirmStep'
-import { useCertify } from '../../context/certify'
 import { useSwipe } from '../../hooks/useSwipe'
 import { formatPhone, isValidThaiPhone } from '../../utils/formatters'
-import { CARRIER_SPEECH, digitsOf, parseCarrierSpeech, spellDigits } from '../../utils/thaiSpeech'
+import { CARRIER_SPEECH, digitsOf, spellDigits } from '../../utils/thaiSpeech'
 
 export default function StudentPhonePage() {
-  const { showToast } = useCertify()
   const {
     steps,
     voice,
@@ -91,26 +89,6 @@ export default function StudentPhonePage() {
     voice.speak(`เลือก ${CARRIER_SPEECH[nextCarrier]} แตะอีกครั้งเพื่อยืนยัน และรับเน็ตฟรี`)
   }
 
-  const handleSpokenCarrier = (transcript) => {
-    const found = parseCarrierSpeech(transcript)
-    if (found) {
-      handlePickCarrier(found)
-    } else {
-      const msg = 'ไม่แน่ใจว่าเครือข่ายไหน ลองพูดอีกครั้ง'
-      setStatusMsg(msg)
-      voice.speak(msg)
-    }
-  }
-
-  const handleSkipNet = () => {
-    if (!isValidThaiPhone(phone)) {
-      showToast('กรอกเบอร์ให้ครบ 10 หลักก่อนข้าม', 'warning')
-      return
-    }
-    setSkippedNet(true)
-    goToStep(steps.length - 1, { carrierOverride: carrier, skippedOverride: true })
-  }
-
   const swipe = useSwipe({
     onSwipeRight: handlePhoneConfirm,
     onSwipeLeft: handlePhoneEdit,
@@ -148,15 +126,7 @@ export default function StudentPhonePage() {
         phone={phone}
         carrier={carrier}
         statusMsg={statusMsg}
-        listening={voice.listening}
         onPickCarrier={handlePickCarrier}
-        onListenCarrier={() =>
-          voice.listen({
-            onStatus: setStatusMsg,
-            onResult: handleSpokenCarrier,
-          })
-        }
-        onSkip={handleSkipNet}
       />
     )
   }

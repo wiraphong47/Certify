@@ -41,15 +41,19 @@ export function useVoice() {
     stopListen()
   }, [])
 
-  const listen = useCallback(({ onResult, onError, onStatus }) => {
+  const listen = useCallback(({ onResult, onInterim, onError, onStatus }) => {
     const started = startListening({
       onResult: (transcript) => {
         setListening(false)
         if (onResult) onResult(transcript)
       },
+      onInterim,
       onError: (err) => {
         setListening(false)
         if (onError) onError(err)
+      },
+      onEnd: () => {
+        setListening(false)
       },
       onStatus,
     })

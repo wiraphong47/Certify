@@ -172,7 +172,7 @@ export function isSpeechRecognitionSupported() {
   return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
 }
 
-export function startListening({ onResult, onError, onStatus }) {
+export function startListening({ onResult, onInterim, onError, onEnd, onStatus }) {
   stopListen()
   stopAudioClip()
 
@@ -182,7 +182,7 @@ export function startListening({ onResult, onError, onStatus }) {
       : null
 
   if (!SR) {
-    const msg = 'เครื่องนี้ไม่รองรับการฟังเสียง ใช้ปุ่มทดลองหรือพิมพ์แทน'
+    const msg = 'เครื่องนี้ไม่รองรับการฟังเสียง ใช้ปุ่มทดลองหรือกดตัวเลขแทน'
     if (onStatus) onStatus(msg)
     if (onError) onError(msg)
     return false
@@ -197,39 +197,101 @@ export function startListening({ onResult, onError, onStatus }) {
     const rec = new SR()
     activeRec = rec
     rec.lang = 'th-TH'
-    rec.interimResults = false
+    rec.interimResults = true
+    rec.continuous = false
     rec.maxAlternatives = 1
+
+    let delivered = false
+    let latestInterim = ''
 
     rec.onresult = (event) => {
       if (activeRec !== rec) return
-      activeRec = null
-      const transcript = event?.results?.[0]?.[0]?.transcript ?? ''
-      if (onResult) onResult(transcript)
+      let finalText = ''
+      let interimText = ''
+
+      for (let i = 0; i < event.results.length; i += 1) {
+        const res = event.results[i]
+        const text = res?.[0]?.transcript ?? ''
+        if (res.isFinal) {
+          finalText += `${text} `
+        } else {
+          interimText += `${text} `
+        }
+      }
+
+      const trimmedFinal = finalText.trim()
+      const trimmedInterim = interimText.trim()
+
+      if (trimmedInterim) {
+        latestInterim = trimmedInterim
+        if (onInterim) onInterim(trimmedInterim)
+        else if (onStatus) onStatus(`กำลังฟัง: "${trimmedInterim}"`)
+      }
+
+      if (trimmedFinal) {
+        delivered = true
+        activeRec = null
+        try {
+          rec.stop()
+        } catch {
+          // ignore
+        }
+        if (onResult) onResult(trimmedFinal)
+      }
     }
 
-    rec.onerror = () => {
+    rec.onerror = (event) => {
       if (activeRec !== rec) return
       activeRec = null
-      const msg = 'ไม่ได้ยิน ลองแตะไมค์อีกครั้ง'
+      const code = String(event?.error || '')
+      if (code === 'aborted') {
+        if (onEnd) onEnd()
+        return
+      }
+
+      let msg = 'ไม่ได้ยิน ลองแตะไมค์อีกครั้ง'
+      let speechMsg = 'ไม่ได้ยิน ลองอีกครั้ง'
+
+      if (code === 'not-allowed' || code === 'service-not-allowed') {
+        msg = 'ยังไม่ได้อนุญาตสิทธิ์ไมโครโฟน กรุณากดอนุญาตไมค์ที่เบราว์เซอร์'
+        speechMsg = ''
+      } else if (code === 'audio-capture') {
+        msg = 'ไม่พบไมโครโฟนในอุปกรณ์นี้ กดปุ่มตัวเลขด้านล่างแทนได้'
+        speechMsg = ''
+      } else if (code === 'network') {
+        msg = 'เชื่อมต่อระบบรับฟังเสียงไม่ได้ กดปุ่มตัวเลขด้านล่างแทนได้'
+        speechMsg = ''
+      }
+
+      delivered = true
       if (onStatus) onStatus(msg)
       if (onError) onError(msg)
-      if (voiceEnabled) {
-        speakText('ไม่ได้ยิน ลองอีกครั้ง')
+      if (voiceEnabled && speechMsg) {
+        speakText(speechMsg)
       }
     }
 
     rec.onend = () => {
       if (activeRec === rec) {
         activeRec = null
+        if (!delivered && latestInterim) {
+          delivered = true
+          if (onResult) onResult(latestInterim)
+          return
+        }
+        if (!delivered && onStatus) {
+          onStatus('ไม่ได้ยิน ลองแตะไมค์อีกครั้ง')
+        }
+        if (onEnd) onEnd()
       }
     }
 
     rec.start()
-    if (onStatus) onStatus('กำลังฟัง พูดได้เลย')
+    if (onStatus) onStatus('กำลังฟัง พูดตัวเลขได้เลย...')
     return true
   } catch {
     activeRec = null
-    const msg = 'เปิดไมค์ไม่ได้ ใช้ปุ่มทดลองหรือพิมพ์แทน'
+    const msg = 'เปิดไมค์ไม่ได้ ใช้ปุ่มทดลองหรือกดตัวเลขแทน'
     if (onStatus) onStatus(msg)
     if (onError) onError(msg)
     return false

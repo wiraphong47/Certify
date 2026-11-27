@@ -49,11 +49,12 @@ export default function App() {
       showLoginAction={showLoginAction}
       onToggleMode={toggleMode}
       onResetDemo={resetDemo}
+      onGoHome={() => navigate('/student/scan')}
       onGoLogin={() => navigate('/login')}
     >
       <Suspense fallback={<PageFallback />}>
         <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<Navigate to="/student/scan" replace />} />
           <Route path="/login" element={<LoginPage />} />
 
           {/* นักเรียน */}
@@ -87,7 +88,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/admin/overview" replace />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/student/scan" replace />} />
         </Routes>
       </Suspense>
     </AppShell>

@@ -14,13 +14,16 @@ function formatCameraError(err) {
   if (/NotAllowedError|PermissionDenied|Permission dismissed/i.test(name + msg)) {
     return 'ยังไม่ได้อนุญาตสิทธิ์กล้อง กรุณากดอนุญาตกล้องที่แถบที่อยู่ด้านบนของเบราว์เซอร์แล้วแตะเริ่มสแกนอีกครั้ง'
   }
+  if (/OverconstrainedError|ConstraintNotSatisfied|no_rear_camera/i.test(name + msg)) {
+    return 'ไม่พบกล้องหลังในอุปกรณ์นี้ — กรุณาใช้มือถือที่มีกล้องหลัง หรือเลือกรูป QR จากแกลเลอรีแทน'
+  }
   if (/NotFoundError|DevicesNotFound/i.test(name + msg)) {
-    return 'ไม่พบกล้องในอุปกรณ์นี้ — สามารถเลือกรูป QR จากแกลเลอรี หรือกดปุ่มทดลองสแกนแทนได้'
+    return 'ไม่พบกล้องหลังในอุปกรณ์นี้ — สามารถเลือกรูป QR จากแกลเลอรี หรือกดปุ่มทดลองสแกนแทนได้'
   }
   if (/NotReadableError|TrackStartError/i.test(name + msg)) {
     return 'ไม่สามารถเปิดกล้องได้ เนื่องจากกล้องกำลังถูกใช้งานโดยโปรแกรมหรือแท็บอื่นอยู่'
   }
-  return `เปิดกล้องไม่สำเร็จ (${msg || 'ไม่ทราบสาเหตุ'}) — สามารถเลือกรูป QR จากแกลเลอรี หรือกดปุ่มทดลองสแกนแทนได้`
+  return `เปิดกล้องหลังไม่สำเร็จ (${msg || 'ไม่ทราบสาเหตุ'}) — สามารถเลือกรูป QR จากแกลเลอรี หรือกดปุ่มทดลองสแกนแทนได้`
 }
 
 export default function StudentScanPage() {
@@ -30,8 +33,6 @@ export default function StudentScanPage() {
   const [scanMode, setScanMode] = useState('idle') // 'idle' | 'camera' | 'gallery' | 'demo'
   const [scanStatusMsg, setScanStatusMsg] = useState('')
   const [cameraError, setCameraError] = useState('')
-  const [availableCameras, setAvailableCameras] = useState([])
-  const [activeCameraIdx, setActiveCameraIdx] = useState(0)
 
   const scannerRef = useRef(null)
   const scanDoneRef = useRef(false)
@@ -133,7 +134,7 @@ export default function StudentScanPage() {
   const handleStartLiveCamera = useCallback(async () => {
     scanDoneRef.current = false
     setCameraError('')
-    setScanStatusMsg('กำลังเปิดกล้อง เล็งไปที่ QR Code ของ Certify')
+    setScanStatusMsg('กำลังเปิดกล้องหลัง เล็งไปที่ QR Code ของ Certify')
     setScanMode('camera')
     if (autoVoiceRef.current) {
       voice.speak('กำลังสแกน เล็งกล้องไปที่คิวอาร์โค้ด', { promptKey: 'scan_loading' })
@@ -146,29 +147,37 @@ export default function StudentScanPage() {
     }
 
     try {
-      let cameras = []
+      // Lock strictly to rear/back camera (never fall back to front camera)
       try {
-        cameras = await Html5Qrcode.getCameras()
-      } catch {
-        cameras = []
-      }
-
-      if (cameras.length > 0) {
-        const backIdx = cameras.findIndex((c) => /back|rear|environment/i.test(c.label || ''))
-        const chosenIdx = backIdx >= 0 ? backIdx : 0
-        setAvailableCameras(cameras)
-        setActiveCameraIdx(chosenIdx)
-        await startScannerWithTarget(cameras[chosenIdx].id)
-        setScanStatusMsg('เล็งกล้องไปที่ QR Code เพื่อเข้าสู่หน้า ThaID')
+        await startScannerWithTarget({ facingMode: { exact: 'environment' } })
+        setScanStatusMsg('เล็งกล้องหลังไปที่ QR Code เพื่อเข้าสู่หน้า ThaID')
         return
-      }
+      } catch (exactErr) {
+        const errInfo = `${exactErr?.name || ''} ${exactErr?.message || exactErr || ''}`
+        if (/NotAllowedError|PermissionDenied|Permission dismissed|NotReadableError|TrackStartError/i.test(errInfo)) {
+          throw exactErr
+        }
 
-      try {
-        await startScannerWithTarget({ facingMode: 'environment' })
-      } catch {
-        await startScannerWithTarget({ facingMode: 'user' })
+        // Fallback: explicitly look for a rear camera by label only
+        let cameras = []
+        try {
+          cameras = await Html5Qrcode.getCameras()
+        } catch {
+          cameras = []
+        }
+
+        const rearCamera = cameras.find(
+          (c) =>
+            /back|rear|environment|หลัง/i.test(c.label || '') &&
+            !/front|user|หน้า/i.test(c.label || ''),
+        )
+        if (!rearCamera) {
+          throw new Error('no_rear_camera')
+        }
+
+        await startScannerWithTarget(rearCamera.id)
+        setScanStatusMsg('เล็งกล้องหลังไปที่ QR Code เพื่อเข้าสู่หน้า ThaID')
       }
-      setScanStatusMsg('เล็งกล้องไปที่ QR Code เพื่อเข้าสู่หน้า ThaID')
     } catch (err) {
       await stopCamera()
       setScanMode('idle')
@@ -182,20 +191,6 @@ export default function StudentScanPage() {
       handleStartLiveCamera()
     }
   }
-
-  const handleSwitchCamera = useCallback(async () => {
-    if (availableCameras.length < 2) return
-    const nextIdx = (activeCameraIdx + 1) % availableCameras.length
-    setActiveCameraIdx(nextIdx)
-    setCameraError('')
-    setScanStatusMsg('กำลังสลับกล้อง...')
-    try {
-      await startScannerWithTarget(availableCameras[nextIdx].id)
-      setScanStatusMsg('เล็งกล้องไปที่ QR Code เพื่อเข้าสู่หน้า ThaID')
-    } catch (err) {
-      setCameraError(formatCameraError(err))
-    }
-  }, [activeCameraIdx, availableCameras, startScannerWithTarget])
 
   const handleStartDemoScan = useCallback(async () => {
     await stopCamera()
@@ -258,12 +253,9 @@ export default function StudentScanPage() {
       scanMode={scanMode}
       statusMsg={scanStatusMsg}
       cameraError={cameraError}
-      activeCameraLabel={availableCameras[activeCameraIdx]?.label || ''}
-      canSwitchCamera={availableCameras.length > 1}
       fileInputRef={scanFileRef}
       onStartLiveCamera={handleStartLiveCamera}
       onCameraBoxKeyDown={handleCameraBoxKeyDown}
-      onSwitchCamera={handleSwitchCamera}
       onStartDemoScan={handleStartDemoScan}
       onCancelScan={handleCancelScan}
       onTriggerGallery={() => scanFileRef.current?.click()}
