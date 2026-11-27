@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Snackbar } from '@mui/material'
 import { changeOrganizerPassword } from '../services/authService'
 import {
@@ -17,13 +17,26 @@ import {
   updateDsrAccountName,
 } from '../services/dsrService'
 import { rotateUniversalQr } from '../services/qrService'
-import { loadDb, resetDb } from '../services/storageService'
+import { fetchInitialDb, loadDb, resetDbAsync } from '../services/storageService'
 import { adjustWalletStock } from '../services/walletService'
 import { CertifyContext } from './certify'
 
 export function CertifyProvider({ children }) {
   const [db, setDb] = useState(() => loadDb())
+  const [apiMode, setApiMode] = useState('local')
   const [toastState, setToastState] = useState({ open: false, message: '', severity: 'info' })
+
+  useEffect(() => {
+    let active = true
+    fetchInitialDb().then(({ db: initialDb, source }) => {
+      if (!active) return
+      setDb(initialDb)
+      setApiMode(source)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const showToast = useCallback((message, severity = 'info') => {
     setToastState({ open: true, message, severity })
@@ -33,8 +46,8 @@ export function CertifyProvider({ children }) {
     setToastState((prev) => ({ ...prev, open: false }))
   }, [])
 
-  const resetDemo = useCallback(() => {
-    const fresh = resetDb()
+  const resetDemo = useCallback(async () => {
+    const fresh = await resetDbAsync()
     setDb(fresh)
     showToast('รีเซ็ตข้อมูลทดลองกลับค่าเริ่มต้นแล้ว', 'success')
   }, [showToast])
@@ -195,6 +208,7 @@ export function CertifyProvider({ children }) {
   const value = useMemo(
     () => ({
       db,
+      apiMode,
       showToast,
       resetDemo,
       saveCourse,
@@ -214,6 +228,7 @@ export function CertifyProvider({ children }) {
     }),
     [
       db,
+      apiMode,
       showToast,
       resetDemo,
       saveCourse,

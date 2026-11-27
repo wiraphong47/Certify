@@ -1,4 +1,5 @@
 import QRCode from 'qrcode'
+import { callApiWithFallback } from './apiClient.js'
 import { loadDb, saveDb } from './storageService.js'
 
 export function buildUniversalQrUrl(qrVersion) {
@@ -20,11 +21,15 @@ export async function generateQrDataUrl(text) {
   })
 }
 
-export async function rotateUniversalQr() {
+function rotateUniversalQrLocal() {
   const db = loadDb()
   db.qrVersion = (db.qrVersion || 1) + 1
   const saved = saveDb(db)
   return { ok: true, qrVersion: saved.qrVersion, db: saved }
+}
+
+export async function rotateUniversalQr() {
+  return callApiWithFallback('/qr/rotate', { method: 'POST' }, rotateUniversalQrLocal, saveDb)
 }
 
 function extractQrParam(url) {

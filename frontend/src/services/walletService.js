@@ -1,4 +1,5 @@
 import { formatPhone } from '../utils/formatters.js'
+import { callApiWithFallback } from './apiClient.js'
 import { loadDb, saveDb } from './storageService.js'
 
 const CARRIER_USSD_PREFIX = {
@@ -37,7 +38,7 @@ export function buildNetRedemptionGuide({ carrier = '', phone = '', skipped = fa
   }
 }
 
-export async function adjustWalletStock(carrier, delta) {
+function adjustWalletStockLocal(carrier, delta) {
   const amount = Number(delta)
   if (!Number.isFinite(amount) || amount === 0) {
     return { ok: false, error: 'กรุณาระบุจำนวนที่มากกว่า 0' }
@@ -56,4 +57,13 @@ export async function adjustWalletStock(carrier, delta) {
   item.total += amount
   const saved = saveDb(db)
   return { ok: true, db: saved }
+}
+
+export async function adjustWalletStock(carrier, delta) {
+  return callApiWithFallback(
+    '/wallet/adjust',
+    { method: 'POST', body: { carrier, delta } },
+    () => adjustWalletStockLocal(carrier, delta),
+    saveDb,
+  )
 }

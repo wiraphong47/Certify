@@ -1,3 +1,4 @@
+import { apiRequest } from './apiClient.js'
 import { createMockSeed } from './mockSeed.js'
 
 const DB_STORAGE_KEY = 'certify_web_db_v1'
@@ -57,4 +58,21 @@ export function saveDb(nextDb) {
 export function resetDb() {
   const seed = createMockSeed()
   return saveDb(seed)
+}
+
+export async function fetchInitialDb() {
+  const res = await apiRequest('/state', { method: 'GET', timeoutMs: 2500 })
+  if (res.reachable && res.data?.ok && res.data.db) {
+    const synced = saveDb(res.data.db)
+    return { db: synced, source: 'backend' }
+  }
+  return { db: loadDb(), source: 'local' }
+}
+
+export async function resetDbAsync() {
+  const res = await apiRequest('/reset', { method: 'POST' })
+  if (res.reachable && res.data?.ok && res.data.db) {
+    return saveDb(res.data.db)
+  }
+  return resetDb()
 }

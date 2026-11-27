@@ -20,6 +20,10 @@ coverage
 !.env.example
 *.local
 
+# Runtime backend JSON database files
+backend/data/*.json
+backend/data/*.tmp
+
 # Editor & OS files
 .vscode/*
 !.vscode/extensions.json

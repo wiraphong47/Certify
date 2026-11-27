@@ -1,3 +1,4 @@
+import { callApiWithFallback } from './apiClient.js'
 import { loadDb, saveDb } from './storageService.js'
 
 const AUTH_SESSION_KEY = 'certify_auth_session'
@@ -36,7 +37,7 @@ export function clearAuthSession() {
   setAuthSession(null)
 }
 
-export async function loginAdmin(usernameInput, password) {
+function loginAdminLocal(usernameInput, password) {
   const username = String(usernameInput || '').trim().toUpperCase()
   const pw = String(password || '')
   if (!username) {
@@ -61,7 +62,15 @@ export async function loginAdmin(usernameInput, password) {
   }
 }
 
-export async function loginOrganizer(dsrIdInput, password) {
+export async function loginAdmin(usernameInput, password) {
+  return callApiWithFallback(
+    '/auth/admin/login',
+    { method: 'POST', body: { username: usernameInput, password } },
+    () => loginAdminLocal(usernameInput, password),
+  )
+}
+
+function loginOrganizerLocal(dsrIdInput, password) {
   const id = String(dsrIdInput || '').trim().toUpperCase()
   const db = loadDb()
   const account = db.dsr.find((d) => d.id === id)
@@ -82,7 +91,15 @@ export async function loginOrganizer(dsrIdInput, password) {
   }
 }
 
-export async function changeOrganizerPassword(dsrId, _currentPw, newPw, confirmPw) {
+export async function loginOrganizer(dsrIdInput, password) {
+  return callApiWithFallback(
+    '/auth/organizer/login',
+    { method: 'POST', body: { dsrId: dsrIdInput, password } },
+    () => loginOrganizerLocal(dsrIdInput, password),
+  )
+}
+
+function changeOrganizerPasswordLocal(dsrId, _currentPw, newPw, confirmPw) {
   if (!newPw || newPw.length < 8) {
     return { ok: false, error: 'รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัว' }
   }
@@ -99,12 +116,25 @@ export async function changeOrganizerPassword(dsrId, _currentPw, newPw, confirmP
   return { ok: true, db: saved }
 }
 
+export async function changeOrganizerPassword(dsrId, currentPw, newPw, confirmPw) {
+  return callApiWithFallback(
+    '/auth/organizer/password',
+    { method: 'POST', body: { dsrId, currentPw, newPw, confirmPw } },
+    () => changeOrganizerPasswordLocal(dsrId, currentPw, newPw, confirmPw),
+    saveDb,
+  )
+}
+
 export async function authenticateWithThaid() {
-  return {
-    ok: true,
-    user: {
-      fullName: 'สมชาย ใจดี',
-      verifiedAt: Date.now(),
-    },
-  }
+  return callApiWithFallback(
+    '/auth/thaid',
+    { method: 'POST' },
+    () => ({
+      ok: true,
+      user: {
+        fullName: 'สมชาย ใจดี',
+        verifiedAt: Date.now(),
+      },
+    }),
+  )
 }

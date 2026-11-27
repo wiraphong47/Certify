@@ -1,16 +1,26 @@
 import { fmtMMSS } from '../utils/formatters.js'
+import { apiRequest, callApiWithFallback } from './apiClient.js'
 import { loadDb, saveDb } from './storageService.js'
 
 export async function listCourses() {
+  const res = await apiRequest('/courses')
+  if (res.reachable && res.data?.ok && Array.isArray(res.data.courses)) {
+    return res.data.courses
+  }
   return loadDb().courses
 }
 
 export async function getCourseById(id) {
+  const res = await apiRequest(`/courses/${encodeURIComponent(id)}`)
+  if (res.reachable && res.data?.ok) {
+    return res.data.course || null
+  }
   return loadDb().courses.find((c) => c.id === id) || null
 }
 
 export async function getCourseByOwner(ownerId) {
-  return loadDb().courses.find((c) => c.owner === ownerId) || null
+  const courses = await listCourses()
+  return courses.find((c) => c.owner === ownerId) || null
 }
 
 export function generateUniqueCode(courses, excludeCourseId = 0, avoidCode = '') {
@@ -71,7 +81,7 @@ export function validateCourseInput(course, allCourses, role = 'organizer') {
   return ''
 }
 
-export async function saveCourse(courseInput, role = 'organizer') {
+function saveCourseLocal(courseInput, role = 'organizer') {
   const db = loadDb()
   const normalized = {
     ...courseInput,
@@ -109,7 +119,18 @@ export async function saveCourse(courseInput, role = 'organizer') {
   return { ok: true, course: normalized, db: saved }
 }
 
-export async function deleteCourse(courseId) {
+export async function saveCourse(courseInput, role = 'organizer') {
+  const path = courseInput?.id ? `/courses/${encodeURIComponent(courseInput.id)}` : '/courses'
+  const method = courseInput?.id ? 'PUT' : 'POST'
+  return callApiWithFallback(
+    path,
+    { method, body: { course: courseInput, role } },
+    () => saveCourseLocal(courseInput, role),
+    saveDb,
+  )
+}
+
+function deleteCourseLocal(courseId) {
   const db = loadDb()
   db.courses = db.courses.filter((c) => c.id !== courseId)
   if (db.checkedIn && db.checkedIn[courseId]) {
@@ -119,7 +140,16 @@ export async function deleteCourse(courseId) {
   return { ok: true, db: saved }
 }
 
-export async function regenerateCourseCode(ownerId, kind = 'out') {
+export async function deleteCourse(courseId) {
+  return callApiWithFallback(
+    `/courses/${encodeURIComponent(courseId)}`,
+    { method: 'DELETE' },
+    () => deleteCourseLocal(courseId),
+    saveDb,
+  )
+}
+
+function regenerateCourseCodeLocal(ownerId, kind = 'out') {
   const db = loadDb()
   const course = db.courses.find((c) => c.owner === ownerId)
   if (!course) return { ok: false, error: 'ไม่พบหลักสูตรของผู้ดูแลรายนี้' }
@@ -133,6 +163,15 @@ export async function regenerateCourseCode(ownerId, kind = 'out') {
   return { ok: true, course, db: saved }
 }
 
+export async function regenerateCourseCode(ownerId, kind = 'out') {
+  return callApiWithFallback(
+    '/courses/regenerate-code',
+    { method: 'POST', body: { ownerId, kind } },
+    () => regenerateCourseCodeLocal(ownerId, kind),
+    saveDb,
+  )
+}
+
 export function getCheckoutRemainingSec(course, checkedInMap = {}, now = Date.now()) {
   if (!course || course.mode !== 'checkin') return 0
   const rec = checkedInMap[course.id]
@@ -142,7 +181,13 @@ export function getCheckoutRemainingSec(course, checkedInMap = {}, now = Date.no
   return Math.max(0, Math.ceil((rec.at + waitMin * 60000 - now) / 1000))
 }
 
-export function verifyStudentCode(digits, courses, checkedInMap = {}, stepId = 'checkout', now = Date.now()) {
+export function verifyStudentCode(
+  digits,
+  courses,
+  checkedInMap = {},
+  stepId = 'checkout',
+  now = Date.now(),
+) {
   const cIn = courses.find((x) => x.mode === 'checkin' && x.codeIn === digits)
   if (cIn) {
     return {
@@ -198,7 +243,7 @@ export function verifyStudentCode(digits, courses, checkedInMap = {}, stepId = '
   }
 }
 
-export async function recordCheckIn(courseId) {
+function recordCheckInLocal(courseId) {
   const db = loadDb()
   const course = db.courses.find((c) => c.id === courseId)
   if (!course) return { ok: false, error: 'ไม่พบหลักสูตร' }
@@ -212,7 +257,16 @@ export async function recordCheckIn(courseId) {
   return { ok: true, course, db: saved }
 }
 
-export async function unlockCheckoutDemo(courseId) {
+export async function recordCheckIn(courseId) {
+  return callApiWithFallback(
+    `/courses/${encodeURIComponent(courseId)}/checkin`,
+    { method: 'POST' },
+    () => recordCheckInLocal(courseId),
+    saveDb,
+  )
+}
+
+function unlockCheckoutDemoLocal(courseId) {
   const db = loadDb()
   if (db.checkedIn && db.checkedIn[courseId]) {
     db.checkedIn[courseId].unlocked = true
@@ -221,7 +275,16 @@ export async function unlockCheckoutDemo(courseId) {
   return { ok: true, db: saved }
 }
 
-export async function recordCertificateClaim({ courseId, carrier, skipped }) {
+export async function unlockCheckoutDemo(courseId) {
+  return callApiWithFallback(
+    `/courses/${encodeURIComponent(courseId)}/unlock-demo`,
+    { method: 'POST' },
+    () => unlockCheckoutDemoLocal(courseId),
+    saveDb,
+  )
+}
+
+function recordCertificateClaimLocal({ courseId, carrier, skipped }) {
   const db = loadDb()
   const course = db.courses.find((c) => c.id === courseId)
   if (course) {
@@ -235,6 +298,15 @@ export async function recordCertificateClaim({ courseId, carrier, skipped }) {
   }
   const saved = saveDb(db)
   return { ok: true, course, db: saved }
+}
+
+export async function recordCertificateClaim({ courseId, carrier, skipped }) {
+  return callApiWithFallback(
+    `/courses/${encodeURIComponent(courseId)}/claim`,
+    { method: 'POST', body: { carrier, skipped } },
+    () => recordCertificateClaimLocal({ courseId, carrier, skipped }),
+    saveDb,
+  )
 }
 
 export function getCourseStatus(course) {
